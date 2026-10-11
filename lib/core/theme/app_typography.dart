@@ -63,9 +63,10 @@ abstract final class AppTypography {
   /// Compact tag / badge typography.
   static TextStyle monoTag({
     Color color = AppColors.terminalCyan,
+    double fontSize = 11,
   }) {
     return mono(
-      fontSize: 11,
+      fontSize: fontSize,
       fontWeight: FontWeight.w600,
       color: color,
       letterSpacing: 0.5,

@@ -116,6 +116,72 @@ void main() {
       expect(item.effectiveDate, item.publishedAt);
     });
 
+    test('falls back to published_at when created_at is absent from view payload', () {
+      final payloadWithoutCreatedAt = <String, dynamic>{
+        'job_id': 'job-200',
+        'title': 'Flutter Lead',
+        'company_name': 'Remote Inc',
+        'platform': 'LinkedIn',
+        'job_url': 'https://example.com/200',
+        'status': 'new',
+        'published_at': '2026-10-11T12:00:00.000Z',
+      };
+
+      final item = JobItem.fromJson(payloadWithoutCreatedAt);
+
+      expect(item.publishedAt, isNotNull);
+      expect(item.createdAt, equals(item.publishedAt));
+      expect(item.effectiveDate, equals(item.publishedAt));
+    });
+
+    test('handles absence of both created_at and published_at gracefully', () {
+      final payloadWithoutDates = <String, dynamic>{
+        'job_id': 'job-201',
+        'title': 'Flutter Lead',
+        'company_name': 'Remote Inc',
+        'platform': 'LinkedIn',
+        'job_url': 'https://example.com/201',
+        'status': 'new',
+      };
+
+      final item = JobItem.fromJson(payloadWithoutDates);
+
+      expect(item.publishedAt, isNull);
+      expect(item.createdAt, isNull);
+      expect(item.effectiveDate, isNull);
+    });
+
+    test('correctly parses real Supabase v_user_jobs schema columns with aliases', () {
+      final realViewJson = <String, dynamic>{
+        'job_id': 'gupy:12676866',
+        'ats': 'gupy',
+        'external_id': '12676866',
+        'title': 'Analista de Dados e BI Pleno',
+        'company': 'Looqbox',
+        'location': 'Remoto',
+        'url': 'https://looqbox.gupy.io/job/123',
+        'published_at': '2026-10-05T15:00:59.622+00:00',
+        'job_created_at': '2026-10-06T09:05:37.535993+00:00',
+        'status': 'new',
+        'notes': null,
+        'applied_at': null,
+        'user_id': null,
+      };
+
+      final item = JobItem.fromJson(realViewJson);
+
+      expect(item.jobId, 'gupy:12676866');
+      expect(item.title, 'Analista de Dados e BI Pleno');
+      expect(item.companyName, 'Looqbox');
+      expect(item.platform, 'gupy');
+      expect(item.jobUrl, 'https://looqbox.gupy.io/job/123');
+      expect(item.location, 'Remoto');
+      expect(item.publishedAt, isNotNull);
+      expect(item.createdAt, isNotNull);
+      expect(item.status, JobStatus.newJob);
+      expect(item.userId, isNull);
+    });
+
     test('supports copyWith, equality and hashCode', () {
       final original = JobItem.fromJson(fullJson);
       final cloned = JobItem.fromJson(fullJson);

@@ -82,6 +82,28 @@ class EnvConfig {
     return key.trim();
   }
 
+  /// Supabase user ID loaded from [EnvConstants.supabaseUserId] or [EnvConstants.defaultUserId].
+  ///
+  /// Returns `null` if not configured or empty.
+  static String? get supabaseUserId {
+    _ensureInitialized();
+    final id = dotenv.maybeGet(EnvConstants.supabaseUserId) ??
+        dotenv.maybeGet(EnvConstants.defaultUserId);
+    if (id == null || id.trim().isEmpty) {
+      return null;
+    }
+    return id.trim();
+  }
+
+  /// Alias for [supabaseUserId].
+  static String? get defaultUserId => supabaseUserId;
+
+  /// Safe accessor for the configured user ID, returning [fallback] if not configured or uninitialized.
+  static String getEffectiveUserId({String fallback = ''}) {
+    if (!_initialized) return fallback;
+    return supabaseUserId ?? fallback;
+  }
+
   /// Retrieves an optional environment variable by [key], returning [defaultValue] if absent.
   static String? get(String key, {String? defaultValue}) {
     _ensureInitialized();

@@ -12,7 +12,8 @@ class JobItem {
     required this.platform,
     required this.jobUrl,
     required this.status,
-    required this.createdAt,
+    this.userId,
+    this.createdAt,
     this.location,
     this.salaryText,
     this.notes,
@@ -23,17 +24,19 @@ class JobItem {
 
   /// Factory parser for payloads originating from the `v_user_jobs` view.
   ///
-  /// Resiliently handles missing, unexpected, and null attributes.
+  /// Resiliently handles missing, unexpected, and alternative column names
+  /// (such as `company`, `ats`, `url`, `job_created_at`).
   factory JobItem.fromJson(Map<String, dynamic> json) {
     final rawJobId = json['job_id'];
     final rawTitle = json['title'];
-    final rawCompany = json['company_name'];
-    final rawPlatform = json['platform'];
-    final rawUrl = json['job_url'];
-    final rawCreatedAt = json['created_at'];
+    final rawCompany = json['company_name'] ?? json['company'];
+    final rawPlatform = json['platform'] ?? json['ats'];
+    final rawUrl = json['job_url'] ?? json['url'];
+    final rawCreatedAt = json['created_at'] ?? json['job_created_at'];
     final rawAppliedAt = json['applied_at'];
     final rawPublishedAt = json['published_at'];
     final rawIsArchived = json['is_archived'];
+    final rawUserId = json['user_id'];
 
     final createdAtParsed = rawCreatedAt != null
         ? DateTime.tryParse(rawCreatedAt.toString())?.toLocal()
@@ -53,6 +56,7 @@ class JobItem {
 
     return JobItem(
       jobId: rawJobId?.toString() ?? '',
+      userId: rawUserId?.toString(),
       title: rawTitle?.toString() ?? '',
       companyName: rawCompany?.toString() ?? '',
       platform: rawPlatform?.toString() ?? '',
@@ -63,13 +67,16 @@ class JobItem {
       notes: json['notes']?.toString(),
       appliedAt: appliedAtParsed,
       publishedAt: publishedAtParsed,
-      createdAt: createdAtParsed ?? DateTime.now(),
+      createdAt: createdAtParsed ?? publishedAtParsed,
       isArchived: isArchivedParsed,
     );
   }
 
   /// Unique identifier of the job (int or string cast to String).
   final String jobId;
+
+  /// User identifier owning interaction with this job (optional, null if unclaimed).
+  final String? userId;
 
   /// Job role title.
   final String title;
@@ -101,8 +108,8 @@ class JobItem {
   /// Timestamp when job was published (optional).
   final DateTime? publishedAt;
 
-  /// Timestamp when vacancy was ingested.
-  final DateTime createdAt;
+  /// Timestamp when vacancy was ingested (optional, falls back to publishedAt).
+  final DateTime? createdAt;
 
   /// Whether the job has been archived/discarded by the user.
   final bool isArchived;
@@ -134,7 +141,7 @@ class JobItem {
   }
 
   /// Effective date for ordering (prefers publishedAt, falls back to createdAt).
-  DateTime get effectiveDate => publishedAt ?? createdAt;
+  DateTime? get effectiveDate => publishedAt ?? createdAt;
 
   /// Whether the job has been submitted/applied.
   bool get isApplied => status != JobStatus.newJob;
@@ -143,6 +150,7 @@ class JobItem {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'job_id': jobId,
+      if (userId != null && userId!.trim().isNotEmpty) 'user_id': userId!.trim(),
       'title': title,
       'company_name': companyName,
       'platform': platform,
@@ -153,7 +161,7 @@ class JobItem {
       'notes': notes,
       'applied_at': appliedAt?.toUtc().toIso8601String(),
       'published_at': publishedAt?.toUtc().toIso8601String(),
-      'created_at': createdAt.toUtc().toIso8601String(),
+      'created_at': createdAt?.toUtc().toIso8601String(),
       'is_archived': isArchived,
     };
   }
@@ -161,6 +169,7 @@ class JobItem {
   /// Returns a copy of this [JobItem] with the given fields replaced.
   JobItem copyWith({
     String? jobId,
+    String? userId,
     String? title,
     String? companyName,
     String? platform,
@@ -176,6 +185,7 @@ class JobItem {
   }) {
     return JobItem(
       jobId: jobId ?? this.jobId,
+      userId: userId ?? this.userId,
       title: title ?? this.title,
       companyName: companyName ?? this.companyName,
       platform: platform ?? this.platform,
@@ -196,6 +206,7 @@ class JobItem {
     if (identical(this, other)) return true;
     return other is JobItem &&
         other.jobId == jobId &&
+        other.userId == userId &&
         other.title == title &&
         other.companyName == companyName &&
         other.platform == platform &&
@@ -213,6 +224,7 @@ class JobItem {
   @override
   int get hashCode => Object.hash(
         jobId,
+        userId,
         title,
         companyName,
         platform,
@@ -229,6 +241,6 @@ class JobItem {
 
   @override
   String toString() {
-    return 'JobItem(jobId: $jobId, title: $title, company: $companyName, status: ${status.value}, isArchived: $isArchived)';
+    return 'JobItem(jobId: $jobId, userId: $userId, title: $title, company: $companyName, status: ${status.value}, isArchived: $isArchived)';
   }
 }

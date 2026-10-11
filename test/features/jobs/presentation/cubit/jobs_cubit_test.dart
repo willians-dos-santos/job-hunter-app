@@ -13,13 +13,36 @@ void main() {
   late MockJobsRepository mockRepository;
   late JobsCubit cubit;
 
-  final testJob = JobItem(
+  final testJob1 = JobItem(
     jobId: '1',
-    title: 'Flutter Dev',
-    companyName: 'Acme',
+    title: 'Senior Flutter Developer',
+    companyName: 'Tech Innovations',
     platform: 'LinkedIn',
-    jobUrl: 'https://example.com',
+    jobUrl: 'https://example.com/job/1',
     status: JobStatus.newJob,
+    location: 'Remoto',
+    createdAt: DateTime.now(),
+  );
+
+  final testJob2 = JobItem(
+    jobId: '2',
+    title: 'Mobile Engineer',
+    companyName: 'AppStudio',
+    platform: 'Gupy',
+    jobUrl: 'https://example.com/job/2',
+    status: JobStatus.applied,
+    location: 'São Paulo, SP (Híbrido)',
+    createdAt: DateTime.now(),
+  );
+
+  final testArchivedJob = JobItem(
+    jobId: '3',
+    title: 'Backend Python',
+    companyName: 'OldCorp',
+    platform: 'Catho',
+    jobUrl: 'https://example.com/job/3',
+    status: JobStatus.rejected,
+    isArchived: true,
     createdAt: DateTime.now(),
   );
 
@@ -37,17 +60,24 @@ void main() {
       expect(cubit.state, const JobsInitial());
     });
 
-    test('emits [JobsLoading, JobsLoaded] when loadJobs succeeds', () async {
-      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob]);
+    test('emits [JobsLoading, JobsLoaded] when loadJobs succeeds and omits archived', () async {
+      when(() => mockRepository.getJobs()).thenAnswer(
+        (_) async => [testJob1, testJob2, testArchivedJob],
+      );
 
       final expectedStates = [
         const JobsLoading(),
-        JobsLoaded([testJob]),
+        JobsLoaded([testJob1, testJob2]),
       ];
 
       expectLater(cubit.stream, emitsInOrder(expectedStates));
 
       await cubit.loadJobs();
+      expect(cubit.state, isA<JobsLoaded>());
+      final loaded = cubit.state as JobsLoaded;
+      expect(loaded.jobs.length, 2);
+      expect(loaded.jobsByStatus(JobStatus.newJob).length, 1);
+      expect(loaded.jobsByStatus(JobStatus.applied).length, 1);
     });
 
     test('emits [JobsLoading, JobsError] when loadJobs fails', () async {
@@ -63,10 +93,148 @@ void main() {
       await cubit.loadJobs();
     });
 
+    test('optimistically updates job status and calls repository', () async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.updateJobStatus(
+            jobId: '1',
+            newStatus: 'interview',
+          )).thenAnswer((_) async {});
+
+      await cubit.loadJobs();
+
+      final updatedJob = testJob1.copyWith(status: JobStatus.interview);
+
+      expectLater(
+        cubit.stream,
+        emits(JobsLoaded([updatedJob])),
+      );
+
+      await cubit.moveJobStatus(jobId: '1', newStatus: 'interview');
+
+      verify(() => mockRepository.updateJobStatus(
+            jobId: '1',
+            newStatus: 'interview',
+          )).called(1);
+    });
+
+    test('rolls back to previous state when moveJobStatus fails', () async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.updateJobStatus(
+            jobId: '1',
+            newStatus: 'interview',
+          )).thenThrow(Exception('Falha no banco Supabase'));
+
+      await cubit.loadJobs();
+
+      final optimisticJob = testJob1.copyWith(status: JobStatus.interview);
+
+      expectLater(
+        cubit.stream,
+        emitsInOrder([
+          JobsLoaded([optimisticJob]),
+          JobsLoaded([testJob1], errorMessage: 'Erro ao mover vaga: Exception: Falha no banco Supabase'),
+        ]),
+      );
+
+      await cubit.moveJobStatus(jobId: '1', newStatus: 'interview');
+
+      verify(() => mockRepository.updateJobStatus(
+            jobId: '1',
+            newStatus: 'interview',
+          )).called(1);
+    });
+
+    test('optimistically removes job when archiveJob succeeds', () async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1, testJob2]);
+      when(() => mockRepository.toggleJobArchived(
+            jobId: '1',
+            isArchived: true,
+          )).thenAnswer((_) async {});
+
+      await cubit.loadJobs();
+
+      expectLater(
+        cubit.stream,
+        emits(JobsLoaded([testJob2])),
+      );
+
+      await cubit.archiveJob('1');
+
+      verify(() => mockRepository.toggleJobArchived(
+            jobId: '1',
+            isArchived: true,
+          )).called(1);
+    });
+
+    test('rolls back to previous list when archiveJob fails', () async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1, testJob2]);
+      when(() => mockRepository.toggleJobArchived(
+            jobId: '1',
+            isArchived: true,
+          )).thenThrow(Exception('Erro de rede'));
+
+      await cubit.loadJobs();
+
+      expectLater(
+        cubit.stream,
+        emitsInOrder([
+          JobsLoaded([testJob2]),
+          JobsLoaded(
+            [testJob1, testJob2],
+            errorMessage: 'Erro ao arquivar vaga: Exception: Erro de rede',
+          ),
+        ]),
+      );
+
+      await cubit.archiveJob('1');
+    });
+
+    test('filters jobs in memory by text query and restores when cleared', () async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1, testJob2]);
+      await cubit.loadJobs();
+
+      // Busca por 'Flutter' deve retornar apenas testJob1
+      cubit.filterJobs('Flutter');
+      var loaded = cubit.state as JobsLoaded;
+      expect(loaded.jobs.length, 1);
+      expect(loaded.jobs.first.jobId, '1');
+      expect(loaded.searchQuery, 'Flutter');
+
+      // Busca por empresa 'AppStudio' deve retornar testJob2
+      cubit.filterJobs('AppStudio');
+      loaded = cubit.state as JobsLoaded;
+      expect(loaded.jobs.length, 1);
+      expect(loaded.jobs.first.jobId, '2');
+
+      // Limpar busca deve restaurar ambas as vagas
+      cubit.filterJobs('');
+      loaded = cubit.state as JobsLoaded;
+      expect(loaded.jobs.length, 2);
+      expect(loaded.searchQuery, isNull);
+    });
+
+    test('clears error message when clearErrorMessage is called', () async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.updateJobStatus(
+            jobId: '1',
+            newStatus: 'rejected',
+          )).thenThrow(Exception('Fail'));
+
+      await cubit.loadJobs();
+      await cubit.moveJobStatus(jobId: '1', newStatus: 'rejected');
+
+      var state = cubit.state as JobsLoaded;
+      expect(state.errorMessage, isNotNull);
+
+      cubit.clearErrorMessage();
+      state = cubit.state as JobsLoaded;
+      expect(state.errorMessage, isNull);
+    });
+
     test('updates interaction and reloads jobs', () async {
       final interaction = UserJobInteraction(jobId: '1', status: JobStatus.applied);
       when(() => mockRepository.updateJobInteraction(interaction)).thenAnswer((_) async {});
-      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob]);
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1]);
 
       await cubit.updateInteraction(interaction);
 

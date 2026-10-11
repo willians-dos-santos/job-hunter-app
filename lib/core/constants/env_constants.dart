@@ -5,4 +5,10 @@ abstract final class EnvConstants {
 
   /// Supabase public anonymous key.
   static const String supabaseAnonKey = 'SUPABASE_ANON_KEY';
+
+  /// Supabase user ID key.
+  static const String supabaseUserId = 'SUPABASE_USER_ID';
+
+  /// Fallback default user ID key.
+  static const String defaultUserId = 'DEFAULT_USER_ID';
 }

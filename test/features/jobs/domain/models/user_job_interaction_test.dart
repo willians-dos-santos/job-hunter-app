@@ -8,6 +8,7 @@ void main() {
       final date = DateTime.utc(2026, 10, 10, 15, 30);
       final interaction = UserJobInteraction(
         jobId: 'job-55',
+        userId: 'usr-42',
         status: JobStatus.interview,
         notes: 'Preparar case study de arquitetura',
         appliedAt: date,
@@ -17,10 +18,26 @@ void main() {
 
       expect(json, {
         'job_id': 'job-55',
+        'user_id': 'usr-42',
         'status': 'interview',
         'notes': 'Preparar case study de arquitetura',
         'applied_at': date.toIso8601String(),
       });
+    });
+
+    test('serializes and deserializes userId correctly', () {
+      final json = {
+        'job_id': 'job-100',
+        'user_id': 'usr-999',
+        'status': 'applied',
+        'applied_at': '2026-10-10T12:00:00.000Z',
+      };
+
+      final interaction = UserJobInteraction.fromJson(json);
+      expect(interaction.userId, 'usr-999');
+
+      final output = interaction.toJson();
+      expect(output['user_id'], 'usr-999');
     });
 
     test('automatically sets appliedAt when status is applied and appliedAt is null', () {

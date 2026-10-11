@@ -33,7 +33,7 @@ void main() {
   setUp(() {
     mockClient = MockSupabaseClient();
     mockQueryBuilder = MockSupabaseQueryBuilder();
-    dataSource = JobRemoteDataSource(mockClient);
+    dataSource = JobRemoteDataSource(mockClient, 'usr-test-123');
 
     when(() => mockClient.from(any())).thenAnswer((_) => mockQueryBuilder);
   });
@@ -67,7 +67,7 @@ void main() {
       expect(jobs.first.companyName, 'Tech Corp');
       expect(capturedFrom, 0);
       expect(capturedTo, 19);
-      expect(capturedOrderCol, 'created_at');
+      expect(capturedOrderCol, 'published_at');
       expect(capturedAscending, isFalse);
       verify(() => mockClient.from(AppConstants.userJobsView)).called(1);
     });
@@ -93,15 +93,53 @@ void main() {
       expect(capturedTo, 29);
     });
 
+    test('applies user_id filter allowing null (unclaimed) and current user records', () async {
+      String? capturedOr;
+
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [sampleJobJson],
+        onOr: (filters) {
+          capturedOr = filters;
+        },
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      await dataSource.getJobs();
+
+      expect(capturedOr, 'user_id.is.null,user_id.eq.usr-test-123');
+    });
+
+    test('overrides configured user_id in or filter when explicit userId parameter is passed to getJobs', () async {
+      String? capturedOr;
+
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [sampleJobJson],
+        onOr: (filters) {
+          capturedOr = filters;
+        },
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      await dataSource.getJobs(userId: 'custom-override-id');
+
+      expect(capturedOr, 'user_id.is.null,user_id.eq.custom-override-id');
+    });
+
     test('applies status filter when statusFilter is provided', () async {
-      String? capturedCol;
-      Object? capturedVal;
+      String? capturedStatusCol;
+      Object? capturedStatusVal;
+      String? capturedOr;
 
       final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
         data: [sampleJobJson],
         onEq: (col, val) {
-          capturedCol = col;
-          capturedVal = val;
+          capturedStatusCol = col;
+          capturedStatusVal = val;
+        },
+        onOr: (filters) {
+          capturedOr = filters;
         },
       );
 
@@ -109,17 +147,18 @@ void main() {
 
       await dataSource.getJobs(statusFilter: 'applied');
 
-      expect(capturedCol, 'status');
-      expect(capturedVal, 'applied');
+      expect(capturedStatusCol, 'status');
+      expect(capturedStatusVal, 'applied');
+      expect(capturedOr, 'user_id.is.null,user_id.eq.usr-test-123');
     });
 
-    test('applies text search filter on title and company_name when query is provided', () async {
-      String? capturedOrFilter;
+    test('applies text search filter on title and company when query is provided', () async {
+      final capturedOrFilters = <String>[];
 
       final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
         data: [sampleJobJson],
         onOr: (filters) {
-          capturedOrFilter = filters;
+          capturedOrFilters.add(filters);
         },
       );
 
@@ -128,8 +167,10 @@ void main() {
       await dataSource.getJobs(query: 'Flutter');
 
       expect(
-        capturedOrFilter,
-        'title.ilike.%Flutter%,company_name.ilike.%Flutter%',
+        capturedOrFilters.any((f) =>
+            f.contains('title.ilike.%Flutter%') &&
+            f.contains('company.ilike.%Flutter%')),
+        isTrue,
       );
     });
 
@@ -193,12 +234,16 @@ void main() {
     test('returns JobItem when record is found', () async {
       String? capturedCol;
       Object? capturedVal;
+      String? capturedOr;
 
       final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
         data: [sampleJobJson],
         onEq: (col, val) {
           capturedCol = col;
           capturedVal = val;
+        },
+        onOr: (filters) {
+          capturedOr = filters;
         },
       );
 
@@ -210,6 +255,7 @@ void main() {
       expect(job.title, 'Senior Flutter Engineer');
       expect(capturedCol, 'job_id');
       expect(capturedVal, 'job-123');
+      expect(capturedOr, 'user_id.is.null,user_id.eq.usr-test-123');
     });
 
     test('throws JobNotFoundFailure when record is null', () async {
@@ -274,6 +320,7 @@ void main() {
 
       expect(capturedPayload, {
         'job_id': 'job-123',
+        'user_id': 'usr-test-123',
         'status': 'interview',
       });
       expect(capturedConflict, 'job_id');
@@ -299,6 +346,7 @@ void main() {
       );
 
       expect(capturedPayload['job_id'], 'job-123');
+      expect(capturedPayload['user_id'], 'usr-test-123');
       expect(capturedPayload['status'], 'applied');
       expect(capturedPayload['applied_at'], isNotNull);
     });
@@ -365,6 +413,7 @@ void main() {
 
       expect(capturedPayload, {
         'job_id': 'job-123',
+        'user_id': 'usr-test-123',
         'notes': 'Feedback positivo na primeira fase',
       });
       verify(() => mockClient.from(AppConstants.userJobInteractionsTable)).called(1);
@@ -411,6 +460,7 @@ void main() {
 
       expect(capturedPayload, {
         'job_id': 'job-123',
+        'user_id': 'usr-test-123',
         'is_archived': true,
       });
       verify(() => mockClient.from(AppConstants.userJobInteractionsTable)).called(1);
@@ -436,6 +486,7 @@ void main() {
 
       expect(capturedPayload, {
         'job_id': 'job-123',
+        'user_id': 'usr-test-123',
         'is_archived': false,
       });
     });
@@ -483,6 +534,7 @@ void main() {
       await dataSource.upsertInteraction(interaction);
 
       expect(capturedPayload['job_id'], 'job-123');
+      expect(capturedPayload['user_id'], 'usr-test-123');
       expect(capturedPayload['status'], 'offer');
       expect(capturedPayload['notes'], 'Oferta final recebida');
     });

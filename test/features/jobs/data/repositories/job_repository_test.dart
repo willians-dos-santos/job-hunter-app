@@ -23,18 +23,25 @@ void main() {
     createdAt: DateTime.now(),
   );
 
+  setUpAll(() {
+    registerFallbackValue(
+      UserJobInteraction(jobId: 'fallback', status: JobStatus.newJob),
+    );
+  });
+
   setUp(() {
     mockDataSource = MockJobRemoteDataSource();
-    repository = JobRepository(mockDataSource);
+    repository = JobRepository(mockDataSource, 'usr-test-123');
   });
 
   group('JobRepository', () {
-    test('delegates getJobs with default parameters', () async {
+    test('delegates getJobs with default parameters and configured userId', () async {
       when(() => mockDataSource.getJobs(
             limit: 20,
             offset: 0,
             statusFilter: null,
             query: null,
+            userId: 'usr-test-123',
           )).thenAnswer((_) async => [testJob]);
 
       final result = await repository.getJobs();
@@ -45,15 +52,17 @@ void main() {
             offset: 0,
             statusFilter: null,
             query: null,
+            userId: 'usr-test-123',
           )).called(1);
     });
 
-    test('delegates getJobs with custom filters and pagination', () async {
+    test('delegates getJobs with custom filters, pagination, and overridden userId', () async {
       when(() => mockDataSource.getJobs(
             limit: 15,
             offset: 30,
             statusFilter: 'interview',
             query: 'Flutter',
+            userId: 'custom-user',
           )).thenAnswer((_) async => [testJob]);
 
       final result = await repository.getJobs(
@@ -61,6 +70,7 @@ void main() {
         offset: 30,
         statusFilter: 'interview',
         query: 'Flutter',
+        userId: 'custom-user',
       );
 
       expect(result, [testJob]);
@@ -69,6 +79,7 @@ void main() {
             offset: 30,
             statusFilter: 'interview',
             query: 'Flutter',
+            userId: 'custom-user',
           )).called(1);
     });
 
@@ -78,6 +89,7 @@ void main() {
             offset: any(named: 'offset'),
             statusFilter: any(named: 'statusFilter'),
             query: any(named: 'query'),
+            userId: any(named: 'userId'),
           )).thenThrow(const JobFetchFailure('Erro de conexão'));
 
       expect(
@@ -87,17 +99,17 @@ void main() {
     });
 
     test('delegates getJobById and returns JobItem', () async {
-      when(() => mockDataSource.getJobById('job-1'))
+      when(() => mockDataSource.getJobById('job-1', userId: 'usr-test-123'))
           .thenAnswer((_) async => testJob);
 
       final result = await repository.getJobById('job-1');
 
       expect(result, testJob);
-      verify(() => mockDataSource.getJobById('job-1')).called(1);
+      verify(() => mockDataSource.getJobById('job-1', userId: 'usr-test-123')).called(1);
     });
 
     test('propagates JobNotFoundFailure from getJobById', () async {
-      when(() => mockDataSource.getJobById('unknown'))
+      when(() => mockDataSource.getJobById('unknown', userId: any(named: 'userId')))
           .thenThrow(const JobNotFoundFailure('unknown'));
 
       expect(
@@ -106,10 +118,11 @@ void main() {
       );
     });
 
-    test('delegates updateJobStatus to datasource', () async {
+    test('delegates updateJobStatus to datasource with configured userId', () async {
       when(() => mockDataSource.updateJobStatus(
             jobId: 'job-1',
             newStatus: 'interview',
+            userId: 'usr-test-123',
           )).thenAnswer((_) async {});
 
       await repository.updateJobStatus(
@@ -120,6 +133,27 @@ void main() {
       verify(() => mockDataSource.updateJobStatus(
             jobId: 'job-1',
             newStatus: 'interview',
+            userId: 'usr-test-123',
+          )).called(1);
+    });
+
+    test('delegates updateJobStatus with explicit userId override', () async {
+      when(() => mockDataSource.updateJobStatus(
+            jobId: 'job-1',
+            newStatus: 'interview',
+            userId: 'override-usr',
+          )).thenAnswer((_) async {});
+
+      await repository.updateJobStatus(
+        jobId: 'job-1',
+        newStatus: 'interview',
+        userId: 'override-usr',
+      );
+
+      verify(() => mockDataSource.updateJobStatus(
+            jobId: 'job-1',
+            newStatus: 'interview',
+            userId: 'override-usr',
           )).called(1);
     });
 
@@ -127,6 +161,7 @@ void main() {
       when(() => mockDataSource.updateJobStatus(
             jobId: any(named: 'jobId'),
             newStatus: any(named: 'newStatus'),
+            userId: any(named: 'userId'),
           )).thenThrow(const JobMutationFailure('Erro ao atualizar status'));
 
       expect(
@@ -135,10 +170,11 @@ void main() {
       );
     });
 
-    test('delegates updateJobNotes to datasource', () async {
+    test('delegates updateJobNotes to datasource with configured userId', () async {
       when(() => mockDataSource.updateJobNotes(
             jobId: 'job-1',
             notes: 'Anotações importantes',
+            userId: 'usr-test-123',
           )).thenAnswer((_) async {});
 
       await repository.updateJobNotes(
@@ -149,13 +185,15 @@ void main() {
       verify(() => mockDataSource.updateJobNotes(
             jobId: 'job-1',
             notes: 'Anotações importantes',
+            userId: 'usr-test-123',
           )).called(1);
     });
 
-    test('delegates toggleJobArchived to datasource', () async {
+    test('delegates toggleJobArchived to datasource with configured userId', () async {
       when(() => mockDataSource.toggleJobArchived(
             jobId: 'job-1',
             isArchived: true,
+            userId: 'usr-test-123',
           )).thenAnswer((_) async {});
 
       await repository.toggleJobArchived(
@@ -166,21 +204,30 @@ void main() {
       verify(() => mockDataSource.toggleJobArchived(
             jobId: 'job-1',
             isArchived: true,
+            userId: 'usr-test-123',
           )).called(1);
     });
 
-    test('delegates updateJobInteraction to datasource', () async {
+    test('delegates updateJobInteraction to datasource ensuring userId is populated', () async {
       final interaction = UserJobInteraction(
         jobId: 'job-1',
         status: JobStatus.applied,
       );
 
-      when(() => mockDataSource.upsertInteraction(interaction))
-          .thenAnswer((_) async {});
+      when(() => mockDataSource.upsertInteraction(
+            any(),
+            userId: any(named: 'userId'),
+          )).thenAnswer((_) async {});
 
       await repository.updateJobInteraction(interaction);
 
-      verify(() => mockDataSource.upsertInteraction(interaction)).called(1);
+      final captured = verify(() => mockDataSource.upsertInteraction(
+            captureAny(),
+            userId: 'usr-test-123',
+          )).captured;
+
+      expect(captured.first, isA<UserJobInteraction>());
+      expect((captured.first as UserJobInteraction).userId, 'usr-test-123');
     });
   });
 }

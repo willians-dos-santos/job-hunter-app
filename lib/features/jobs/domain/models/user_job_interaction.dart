@@ -9,6 +9,7 @@ class UserJobInteraction {
   UserJobInteraction({
     required this.jobId,
     required this.status,
+    this.userId,
     this.notes,
     this.isArchived,
     DateTime? appliedAt,
@@ -19,6 +20,7 @@ class UserJobInteraction {
   /// Factory parser for interaction records.
   factory UserJobInteraction.fromJson(Map<String, dynamic> json) {
     final rawJobId = json['job_id'];
+    final rawUserId = json['user_id'];
     final rawStatus = json['status'];
     final rawAppliedAt = json['applied_at'];
     final rawIsArchived = json['is_archived'];
@@ -36,6 +38,7 @@ class UserJobInteraction {
 
     return UserJobInteraction(
       jobId: rawJobId?.toString() ?? '',
+      userId: rawUserId?.toString(),
       status: status,
       notes: json['notes']?.toString(),
       isArchived: isArchived,
@@ -45,6 +48,9 @@ class UserJobInteraction {
 
   /// Target vacancy identifier.
   final String jobId;
+
+  /// User identifier who owns or performed this interaction (optional).
+  final String? userId;
 
   /// Current user status in the funnel.
   final JobStatus status;
@@ -62,6 +68,7 @@ class UserJobInteraction {
   Map<String, dynamic> toJson() {
     final data = <String, dynamic>{
       'job_id': jobId,
+      if (userId != null && userId!.trim().isNotEmpty) 'user_id': userId!.trim(),
       'status': status.value,
       'notes': notes,
       'applied_at': appliedAt?.toUtc().toIso8601String(),
@@ -75,6 +82,7 @@ class UserJobInteraction {
   /// Returns a copy with the given fields replaced.
   UserJobInteraction copyWith({
     String? jobId,
+    String? userId,
     JobStatus? status,
     String? notes,
     bool? isArchived,
@@ -82,6 +90,7 @@ class UserJobInteraction {
   }) {
     return UserJobInteraction(
       jobId: jobId ?? this.jobId,
+      userId: userId ?? this.userId,
       status: status ?? this.status,
       notes: notes ?? this.notes,
       isArchived: isArchived ?? this.isArchived,
@@ -94,6 +103,7 @@ class UserJobInteraction {
     if (identical(this, other)) return true;
     return other is UserJobInteraction &&
         other.jobId == jobId &&
+        other.userId == userId &&
         other.status == status &&
         other.notes == notes &&
         other.isArchived == isArchived &&
@@ -101,10 +111,11 @@ class UserJobInteraction {
   }
 
   @override
-  int get hashCode => Object.hash(jobId, status, notes, isArchived, appliedAt);
+  int get hashCode =>
+      Object.hash(jobId, userId, status, notes, isArchived, appliedAt);
 
   @override
   String toString() {
-    return 'UserJobInteraction(jobId: $jobId, status: ${status.value}, isArchived: $isArchived, appliedAt: $appliedAt)';
+    return 'UserJobInteraction(jobId: $jobId, userId: $userId, status: ${status.value}, isArchived: $isArchived, appliedAt: $appliedAt)';
   }
 }

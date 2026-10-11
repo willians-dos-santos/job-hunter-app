@@ -76,5 +76,40 @@ void main() {
       expect(EnvConfig.get('CUSTOM_VAR'), 'hello');
       expect(EnvConfig.get('NON_EXISTENT', defaultValue: 'fallback'), 'fallback');
     });
+
+    test('loads supabaseUserId from SUPABASE_USER_ID or DEFAULT_USER_ID', () {
+      EnvConfig.initForTest({
+        EnvConstants.supabaseUrl: 'https://test.supabase.co',
+        EnvConstants.supabaseAnonKey: 'anon-key',
+        EnvConstants.supabaseUserId: 'usr-12345',
+      });
+
+      expect(EnvConfig.supabaseUserId, 'usr-12345');
+      expect(EnvConfig.defaultUserId, 'usr-12345');
+      expect(EnvConfig.getEffectiveUserId(), 'usr-12345');
+    });
+
+    test('falls back to DEFAULT_USER_ID when SUPABASE_USER_ID is absent', () {
+      EnvConfig.initForTest({
+        EnvConstants.supabaseUrl: 'https://test.supabase.co',
+        EnvConstants.supabaseAnonKey: 'anon-key',
+        EnvConstants.defaultUserId: 'usr-fallback-999',
+      });
+
+      expect(EnvConfig.supabaseUserId, 'usr-fallback-999');
+      expect(EnvConfig.defaultUserId, 'usr-fallback-999');
+      expect(EnvConfig.getEffectiveUserId(), 'usr-fallback-999');
+    });
+
+    test('returns null / fallback when neither user id variable is configured', () {
+      EnvConfig.initForTest({
+        EnvConstants.supabaseUrl: 'https://test.supabase.co',
+        EnvConstants.supabaseAnonKey: 'anon-key',
+      });
+
+      expect(EnvConfig.supabaseUserId, isNull);
+      expect(EnvConfig.defaultUserId, isNull);
+      expect(EnvConfig.getEffectiveUserId(fallback: 'anon'), 'anon');
+    });
   });
 }

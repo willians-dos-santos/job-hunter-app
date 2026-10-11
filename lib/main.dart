@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'core/constants/app_constants.dart';
 import 'core/errors/configuration_exception.dart';
@@ -8,7 +9,10 @@ import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_typography.dart';
 import 'core/theme/kanban_status_colors.dart';
+import 'features/jobs/data/repositories/job_repository_impl.dart';
 import 'features/jobs/domain/models/job_status.dart';
+import 'features/jobs/presentation/cubit/jobs_cubit.dart';
+import 'features/jobs/presentation/pages/jobs_kanban_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,6 +91,23 @@ class BootstrapHomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Abrir Quadro Kanban',
+            icon: const Icon(
+              Icons.view_kanban_rounded,
+              color: AppColors.terminalCyan,
+            ),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => BlocProvider(
+                    create: (_) => JobsCubit(JobRepository())..loadJobs(),
+                    child: const JobsKanbanPage(),
+                  ),
+                ),
+              );
+            },
+          ),
           Container(
             margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -275,6 +296,79 @@ class BootstrapHomeScreen extends StatelessWidget {
                               desc: 'SearchConfig Models',
                             ),
                           ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Card de Acesso ao Quadro Kanban (Spec 003)
+                Card(
+                  color: AppColors.slate800,
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryIndigo.withAlpha(30),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.primaryIndigo.withAlpha(100),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.view_kanban_rounded,
+                            color: AppColors.terminalCyan,
+                            size: 28,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Spec 003: Quadro Kanban de Vagas',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textWhite,
+                                    ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Visualização do funil em 5 colunas, atualização otimista com rollback e filtros.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => BlocProvider(
+                                  create: (_) =>
+                                      JobsCubit(JobRepository())..loadJobs(),
+                                  child: const JobsKanbanPage(),
+                                ),
+                              ),
+                            );
+                          },
+                          icon:
+                              const Icon(Icons.arrow_forward_rounded, size: 16),
+                          label: const Text('Abrir Kanban'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primaryIndigo,
+                            foregroundColor: Colors.white,
+                          ),
                         ),
                       ],
                     ),
