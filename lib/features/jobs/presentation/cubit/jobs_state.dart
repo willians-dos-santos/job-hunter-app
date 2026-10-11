@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../domain/models/job_item.dart';
+import '../../domain/models/job_modality.dart';
 import '../../domain/models/job_status.dart';
 
 /// Base state for jobs presentation.
@@ -25,11 +26,12 @@ final class JobsLoaded extends JobsState {
     this.jobs, {
     this.allJobs = const [],
     this.searchQuery,
+    this.selectedModality = JobModalityFilter.all,
     this.errorMessage,
     this.successMessage,
   });
 
-  /// Active list of jobs currently displayed (filtered by search query and non-archived).
+  /// Active list of jobs currently displayed (filtered by search query, modality, and non-archived).
   final List<JobItem> jobs;
 
   /// Base list of all active non-archived jobs before memory filtering.
@@ -38,11 +40,19 @@ final class JobsLoaded extends JobsState {
   /// Current text search query applied to [jobs], if any.
   final String? searchQuery;
 
+  /// Current modality filter applied to [jobs].
+  final JobModalityFilter selectedModality;
+
   /// Optional error notification message from an optimistic action rollback.
   final String? errorMessage;
 
   /// Optional success confirmation message for user notifications.
   final String? successMessage;
+
+  /// Whether any filter (text search or modality) is actively filtering the jobs.
+  bool get hasActiveFilter =>
+      (searchQuery != null && searchQuery!.trim().isNotEmpty) ||
+      selectedModality != JobModalityFilter.all;
 
   /// Effective list of all jobs, defaulting to [jobs] if [allJobs] is empty.
   List<JobItem> get effectiveAllJobs => allJobs.isEmpty ? jobs : allJobs;
@@ -57,15 +67,19 @@ final class JobsLoaded extends JobsState {
     List<JobItem>? jobs,
     List<JobItem>? allJobs,
     String? searchQuery,
+    JobModalityFilter? selectedModality,
     String? errorMessage,
     String? successMessage,
+    bool clearSearchQuery = false,
     bool clearErrorMessage = false,
     bool clearSuccessMessage = false,
   }) {
     return JobsLoaded(
       jobs ?? this.jobs,
       allJobs: allJobs ?? effectiveAllJobs,
-      searchQuery: searchQuery ?? this.searchQuery,
+      searchQuery:
+          clearSearchQuery ? null : (searchQuery ?? this.searchQuery),
+      selectedModality: selectedModality ?? this.selectedModality,
       errorMessage:
           clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
       successMessage:
@@ -80,6 +94,7 @@ final class JobsLoaded extends JobsState {
         listEquals(other.jobs, jobs) &&
         listEquals(other.effectiveAllJobs, effectiveAllJobs) &&
         other.searchQuery == searchQuery &&
+        other.selectedModality == selectedModality &&
         other.errorMessage == errorMessage &&
         other.successMessage == successMessage;
   }
@@ -89,6 +104,7 @@ final class JobsLoaded extends JobsState {
         Object.hashAll(jobs),
         Object.hashAll(effectiveAllJobs),
         searchQuery,
+        selectedModality,
         errorMessage,
         successMessage,
       );

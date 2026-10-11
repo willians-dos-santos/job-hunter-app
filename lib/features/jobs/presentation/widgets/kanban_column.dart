@@ -191,36 +191,39 @@ class KanbanColumn extends StatelessWidget {
 
   Widget _buildEmptyState(BuildContext context, Color statusColor) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          decoration: BoxDecoration(
-            color: AppColors.slate850.withAlpha(100),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: AppColors.slate700.withAlpha(140),
-              style: BorderStyle.solid,
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: AppColors.slate850.withAlpha(100),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.slate700.withAlpha(140),
+                style: BorderStyle.solid,
+              ),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.inbox_outlined,
-                size: 28,
-                color: AppColors.textSlate500,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Nenhuma vaga nesta etapa',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSlate500,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-            ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.inbox_outlined,
+                  size: 26,
+                  color: AppColors.textSlate500,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Nenhuma vaga nesta etapa',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSlate500,
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

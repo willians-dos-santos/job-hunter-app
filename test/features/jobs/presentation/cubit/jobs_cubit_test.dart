@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:job_hunter_app/features/jobs/domain/models/job_item.dart';
+import 'package:job_hunter_app/features/jobs/domain/models/job_modality.dart';
 import 'package:job_hunter_app/features/jobs/domain/models/job_status.dart';
 import 'package:job_hunter_app/features/jobs/domain/models/user_job_interaction.dart';
 import 'package:job_hunter_app/features/jobs/domain/repositories/jobs_repository.dart';
@@ -43,6 +44,17 @@ void main() {
     jobUrl: 'https://example.com/job/3',
     status: JobStatus.rejected,
     isArchived: true,
+    createdAt: DateTime.now(),
+  );
+
+  final testJobOnSite = JobItem(
+    jobId: '4',
+    title: 'Engenheiro de Software',
+    companyName: 'Banco Seguro',
+    platform: 'Gupy',
+    jobUrl: 'https://example.com/job/4',
+    status: JobStatus.newJob,
+    location: 'Belo Horizonte, MG (Presencial)',
     createdAt: DateTime.now(),
   );
 
@@ -214,6 +226,63 @@ void main() {
       loaded = cubit.state as JobsLoaded;
       expect(loaded.jobs.length, 2);
       expect(loaded.searchQuery, isNull);
+    });
+
+    test('filters jobs by modality filter and combines with text search', () async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1, testJob2, testJobOnSite]);
+      await cubit.loadJobs();
+
+      // Inicialmente 3 vagas
+      expect((cubit.state as JobsLoaded).jobs.length, 3);
+
+      // Filtro Remoto -> apenas testJob1
+      cubit.setModalityFilter(JobModalityFilter.remote);
+      var state = cubit.state as JobsLoaded;
+      expect(state.selectedModality, JobModalityFilter.remote);
+      expect(state.jobs.length, 1);
+      expect(state.jobs.first.jobId, '1');
+
+      // Filtro Híbrido -> apenas testJob2
+      cubit.setModalityFilter(JobModalityFilter.hybrid);
+      state = cubit.state as JobsLoaded;
+      expect(state.selectedModality, JobModalityFilter.hybrid);
+      expect(state.jobs.length, 1);
+      expect(state.jobs.first.jobId, '2');
+
+      // Filtro Presencial -> apenas testJobOnSite
+      cubit.setModalityFilter(JobModalityFilter.onSite);
+      state = cubit.state as JobsLoaded;
+      expect(state.selectedModality, JobModalityFilter.onSite);
+      expect(state.jobs.length, 1);
+      expect(state.jobs.first.jobId, '4');
+
+      // Filtro Todos -> restaura 3 vagas
+      cubit.setModalityFilter(JobModalityFilter.all);
+      state = cubit.state as JobsLoaded;
+      expect(state.jobs.length, 3);
+
+      // Combinação: Filtro Remoto + Busca por texto 'Flutter' -> testJob1
+      cubit.setModalityFilter(JobModalityFilter.remote);
+      cubit.filterJobs('Flutter');
+      state = cubit.state as JobsLoaded;
+      expect(state.jobs.length, 1);
+      expect(state.jobs.first.jobId, '1');
+      expect(state.hasActiveFilter, isTrue);
+
+      // Combinação sem correspondência: Remoto + 'Banco' -> 0 vagas
+      cubit.filterJobs('Banco');
+      state = cubit.state as JobsLoaded;
+      expect(state.jobs, isEmpty);
+      expect(state.hasActiveFilter, isTrue);
+
+      // Reset completo restaura tudo
+      cubit.resetFilters();
+      state = cubit.state as JobsLoaded;
+      expect(state.jobs.length, 3);
+      expect(state.searchQuery, isNull);
+      expect(state.selectedModality, JobModalityFilter.all);
+      expect(state.hasActiveFilter, isFalse);
     });
 
     test('clears error message when clearErrorMessage is called', () async {

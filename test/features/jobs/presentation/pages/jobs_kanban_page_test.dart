@@ -63,6 +63,39 @@ void main() {
     createdAt: DateTime.now(),
   );
 
+  final testJobRemote = JobItem(
+    jobId: '10',
+    title: 'Flutter Developer Remote',
+    companyName: 'Cloud Corp',
+    platform: 'LinkedIn',
+    jobUrl: 'https://example.com/10',
+    status: JobStatus.newJob,
+    location: 'Remoto',
+    createdAt: DateTime.now(),
+  );
+
+  final testJobHybrid = JobItem(
+    jobId: '20',
+    title: 'Mobile Engineer Hybrid',
+    companyName: 'Metro Inc',
+    platform: 'Gupy',
+    jobUrl: 'https://example.com/20',
+    status: JobStatus.interview,
+    location: 'Curitiba, PR (Híbrido)',
+    createdAt: DateTime.now(),
+  );
+
+  final testJobOnSite = JobItem(
+    jobId: '30',
+    title: 'Software Engineer OnSite',
+    companyName: 'Central Bank',
+    platform: 'Catho',
+    jobUrl: 'https://example.com/30',
+    status: JobStatus.offer,
+    location: 'Brasília, DF (Presencial)',
+    createdAt: DateTime.now(),
+  );
+
   setUp(() {
     mockRepository = MockJobsRepository();
     cubit = JobsCubit(mockRepository);
@@ -151,6 +184,7 @@ void main() {
 
       // Filter by 'Lead Mobile'
       await tester.enterText(searchField, 'Lead Mobile');
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
 
       expect(find.text('Lead Mobile Developer'), findsOneWidget);
@@ -377,6 +411,194 @@ void main() {
             jobId: '1',
             notes: 'Nova anotação sobre a vaga',
           )).called(1);
+    });
+
+    testWidgets('debounces search input by ~400ms before applying filter',
+        (tester) async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1, testJob2]);
+
+      await cubit.loadJobs();
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final searchField = find.byType(TextField);
+
+      // Digita no campo de busca
+      await tester.enterText(searchField, 'Lead Mobile');
+
+      // Antes de 400ms (ex: 200ms), o debounce ainda não expirou
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Senior Flutter Specialist'), findsOneWidget);
+      expect(find.text('Lead Mobile Developer'), findsOneWidget);
+
+      // Avança mais 250ms (totalizando > 400ms): debounce dispara
+      await tester.pump(const Duration(milliseconds: 250));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Lead Mobile Developer'), findsOneWidget);
+      expect(find.text('Senior Flutter Specialist'), findsNothing);
+    });
+
+    testWidgets(
+        'filters jobs when modality chips are tapped and updates job counter',
+        (tester) async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async =>
+          [testJobRemote, testJobHybrid, testJobOnSite]);
+
+      await cubit.loadJobs();
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.text('3 vagas'), findsOneWidget);
+
+      // Toque no chip "Remoto"
+      final remoteChip = find.byKey(const ValueKey('chip_modality_remote'));
+      expect(remoteChip, findsOneWidget);
+      await tester.tap(remoteChip);
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 vagas'), findsOneWidget);
+      expect(find.text('Flutter Developer Remote'), findsOneWidget);
+      expect(find.text('Mobile Engineer Hybrid'), findsNothing);
+      expect(find.text('Software Engineer OnSite'), findsNothing);
+
+      // Toque no chip "Híbrido"
+      final hybridChip = find.byKey(const ValueKey('chip_modality_hybrid'));
+      expect(hybridChip, findsOneWidget);
+      await tester.tap(hybridChip);
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 vagas'), findsOneWidget);
+      expect(find.text('Mobile Engineer Hybrid'), findsOneWidget);
+      expect(find.text('Flutter Developer Remote'), findsNothing);
+
+      // Toque no chip "Presencial"
+      final onSiteChip = find.byKey(const ValueKey('chip_modality_onSite'));
+      expect(onSiteChip, findsOneWidget);
+      await tester.tap(onSiteChip);
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 vagas'), findsOneWidget);
+      expect(find.text('Software Engineer OnSite'), findsOneWidget);
+      expect(find.text('Mobile Engineer Hybrid'), findsNothing);
+
+      // Toque no chip "Todos"
+      final allChip = find.byKey(const ValueKey('chip_modality_all'));
+      expect(allChip, findsOneWidget);
+      await tester.tap(allChip);
+      await tester.pumpAndSettle();
+
+      expect(find.text('3 vagas'), findsOneWidget);
+      expect(find.text('Flutter Developer Remote'), findsOneWidget);
+      expect(find.text('Mobile Engineer Hybrid'), findsOneWidget);
+      expect(find.text('Software Engineer OnSite'), findsOneWidget);
+    });
+
+    testWidgets(
+        'renders contextual empty state when search or filter yields no results and resets filters',
+        (tester) async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async =>
+          [testJobRemote, testJobHybrid, testJobOnSite]);
+
+      await cubit.loadJobs();
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final searchField = find.byType(TextField);
+
+      // Busca sem correspondência
+      await tester.enterText(searchField, 'Inexistente XYZ');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      // KanbanColumn deve ser substituído pelo Empty State
+      expect(find.byType(KanbanColumn), findsNothing);
+      expect(find.text('Nenhuma vaga encontrada'), findsOneWidget);
+      expect(
+          find.text(
+              'Nenhum resultado corresponde à sua pesquisa ou filtro atual.'),
+          findsOneWidget);
+      expect(find.text('0 vagas'), findsOneWidget);
+
+      final resetButton = find.byKey(const Key('reset_filters_button'));
+      expect(resetButton, findsOneWidget);
+
+      // Tocar no botão "Redefinir filtros"
+      await tester.tap(resetButton);
+      await tester.pumpAndSettle();
+
+      // Todas as 3 vagas e as 5 colunas restauradas
+      expect(find.byType(KanbanColumn), findsNWidgets(5));
+      expect(find.text('3 vagas'), findsOneWidget);
+      expect(find.text('Flutter Developer Remote'), findsOneWidget);
+      expect(find.text('Mobile Engineer Hybrid'), findsOneWidget);
+      expect(find.text('Software Engineer OnSite'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      final textWidget = tester.widget<TextField>(searchField);
+      expect(textWidget.controller?.text, isEmpty);
+    });
+
+    testWidgets(
+        'empty filtered state adapts without overflow on reduced vertical viewport',
+        (tester) async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJobRemote]);
+
+      await cubit.loadJobs();
+
+      // Viewport vertical reduzido simulando teclado aberto em tela móvel
+      tester.view.physicalSize = const Size(400, 340);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final searchField = find.byType(TextField);
+      await tester.enterText(searchField, 'SemResultado');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nenhuma vaga encontrada'), findsOneWidget);
+      expect(find.byKey(const Key('reset_filters_button')), findsOneWidget);
+
+      // Garante que o scroll vertical funciona sem erros de overflow de pixels
+      final emptyScroll = find.byWidgetPredicate(
+        (w) => w is SingleChildScrollView && w.scrollDirection == Axis.vertical,
+      );
+      expect(emptyScroll, findsOneWidget);
+      await tester.drag(emptyScroll, const Offset(0, -100));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets(
+        'unfocuses search text field when tapping outside on the background',
+        (tester) async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1, testJob2]);
+
+      await cubit.loadJobs();
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final searchField = find.byType(TextField);
+
+      // Foca no campo de busca
+      await tester.tap(searchField);
+      await tester.pumpAndSettle();
+
+      final FocusNode firstFocus = FocusScope.of(tester.element(searchField));
+      expect(firstFocus.hasFocus, isTrue);
+
+      // Toca no fundo/fora do campo de busca
+      await tester.tapAt(const Offset(20, 20));
+      await tester.pumpAndSettle();
+
+      expect(firstFocus.hasFocus, isFalse);
     });
   });
 }

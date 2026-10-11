@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'job_modality.dart';
 import 'job_status.dart';
 
 /// Represents an enriched job listing viewed by the user from `v_user_jobs`.
@@ -145,6 +146,59 @@ class JobItem {
 
   /// Whether the job has been submitted/applied.
   bool get isApplied => status != JobStatus.newJob;
+
+  /// Detects whether this job matches the given modality [filter].
+  bool matchesModality(JobModalityFilter filter) {
+    if (filter == JobModalityFilter.all) return true;
+    final loc = (location ?? '').toLowerCase();
+    final t = title.toLowerCase();
+
+    final isRemote = loc.contains('remoto') ||
+        loc.contains('remote') ||
+        t.contains('remoto') ||
+        t.contains('remote');
+
+    final isHybrid = loc.contains('híbrido') ||
+        loc.contains('hibrido') ||
+        loc.contains('hybrid') ||
+        t.contains('híbrido') ||
+        t.contains('hibrido') ||
+        t.contains('hybrid');
+
+    final isExplicitOnSite = loc.contains('presencial') ||
+        loc.contains('on-site') ||
+        loc.contains('onsite') ||
+        t.contains('presencial');
+
+    switch (filter) {
+      case JobModalityFilter.all:
+        return true;
+      case JobModalityFilter.remote:
+        return isRemote;
+      case JobModalityFilter.hybrid:
+        return isHybrid;
+      case JobModalityFilter.onSite:
+        return isExplicitOnSite ||
+            (location != null &&
+                location!.trim().isNotEmpty &&
+                !isRemote &&
+                !isHybrid);
+    }
+  }
+
+  /// The detected work modality for UI badges and labels, if determinable.
+  JobModalityFilter? get detectedModality {
+    if (matchesModality(JobModalityFilter.remote)) {
+      return JobModalityFilter.remote;
+    }
+    if (matchesModality(JobModalityFilter.hybrid)) {
+      return JobModalityFilter.hybrid;
+    }
+    if (matchesModality(JobModalityFilter.onSite)) {
+      return JobModalityFilter.onSite;
+    }
+    return null;
+  }
 
   /// Converts this model to a JSON map.
   Map<String, dynamic> toJson() {

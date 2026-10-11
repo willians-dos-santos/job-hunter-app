@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/models/job_item.dart';
+import '../../domain/models/job_modality.dart';
 import '../../domain/models/job_status.dart';
 import '../../domain/models/user_job_interaction.dart';
 import '../../domain/repositories/jobs_repository.dart';
@@ -46,11 +47,16 @@ class JobsCubit extends Cubit<JobsState> {
       return job;
     }).toList();
 
-    final updatedJobs = _applyFilter(updatedAllJobs, currentState.searchQuery);
+    final updatedJobs = _applyFilter(
+      updatedAllJobs,
+      currentState.searchQuery,
+      currentState.selectedModality,
+    );
     emit(JobsLoaded(
       updatedJobs,
       allJobs: updatedAllJobs,
       searchQuery: currentState.searchQuery,
+      selectedModality: currentState.selectedModality,
     ));
 
     // 2. Persistência com Rollback em caso de erro
@@ -64,6 +70,7 @@ class JobsCubit extends Cubit<JobsState> {
         previousJobs,
         allJobs: previousAllJobs,
         searchQuery: currentState.searchQuery,
+        selectedModality: currentState.selectedModality,
         errorMessage: 'Erro ao mover vaga: $e',
       ));
     }
@@ -82,12 +89,17 @@ class JobsCubit extends Cubit<JobsState> {
     // 1. Otimista: remove da lista ativa exibida
     final updatedAllJobs =
         previousAllJobs.where((job) => job.jobId != jobId).toList();
-    final updatedJobs = _applyFilter(updatedAllJobs, currentState.searchQuery);
+    final updatedJobs = _applyFilter(
+      updatedAllJobs,
+      currentState.searchQuery,
+      currentState.selectedModality,
+    );
 
     emit(JobsLoaded(
       updatedJobs,
       allJobs: updatedAllJobs,
       searchQuery: currentState.searchQuery,
+      selectedModality: currentState.selectedModality,
     ));
 
     // 2. Persistência
@@ -100,6 +112,7 @@ class JobsCubit extends Cubit<JobsState> {
         updatedJobs,
         allJobs: updatedAllJobs,
         searchQuery: currentState.searchQuery,
+        selectedModality: currentState.selectedModality,
         successMessage: 'Vaga arquivada com sucesso.',
       ));
     } catch (e) {
@@ -107,6 +120,7 @@ class JobsCubit extends Cubit<JobsState> {
         previousJobs,
         allJobs: previousAllJobs,
         searchQuery: currentState.searchQuery,
+        selectedModality: currentState.selectedModality,
         errorMessage: 'Erro ao arquivar vaga: $e',
       ));
     }
@@ -133,11 +147,16 @@ class JobsCubit extends Cubit<JobsState> {
       return job;
     }).toList();
 
-    final updatedJobs = _applyFilter(updatedAllJobs, currentState.searchQuery);
+    final updatedJobs = _applyFilter(
+      updatedAllJobs,
+      currentState.searchQuery,
+      currentState.selectedModality,
+    );
     emit(JobsLoaded(
       updatedJobs,
       allJobs: updatedAllJobs,
       searchQuery: currentState.searchQuery,
+      selectedModality: currentState.selectedModality,
     ));
 
     // 2. Persistência com Rollback em caso de erro
@@ -150,6 +169,7 @@ class JobsCubit extends Cubit<JobsState> {
         updatedJobs,
         allJobs: updatedAllJobs,
         searchQuery: currentState.searchQuery,
+        selectedModality: currentState.selectedModality,
         successMessage: 'Anotações salvas com sucesso.',
       ));
     } catch (e) {
@@ -157,31 +177,70 @@ class JobsCubit extends Cubit<JobsState> {
         previousJobs,
         allJobs: previousAllJobs,
         searchQuery: currentState.searchQuery,
+        selectedModality: currentState.selectedModality,
         errorMessage: 'Erro ao salvar anotações: $e',
       ));
     }
   }
 
-  /// Filters loaded jobs in memory across title, company, location, and platform.
+  /// Filters loaded jobs in memory across title, company, location, and platform,
+  /// preserving any currently selected work modality.
   void filterJobs(String? query) {
     final currentState = state;
     if (currentState is! JobsLoaded) return;
 
     final trimmedQuery = query?.trim();
     if (trimmedQuery == null || trimmedQuery.isEmpty) {
-      emit(JobsLoaded(
+      final filtered = _applyFilter(
         currentState.effectiveAllJobs,
-        allJobs: currentState.effectiveAllJobs,
-        searchQuery: null,
+        null,
+        currentState.selectedModality,
+      );
+      emit(currentState.copyWith(
+        jobs: filtered,
+        clearSearchQuery: true,
       ));
       return;
     }
 
-    final filtered = _applyFilter(currentState.effectiveAllJobs, trimmedQuery);
-    emit(JobsLoaded(
-      filtered,
-      allJobs: currentState.effectiveAllJobs,
+    final filtered = _applyFilter(
+      currentState.effectiveAllJobs,
+      trimmedQuery,
+      currentState.selectedModality,
+    );
+    emit(currentState.copyWith(
+      jobs: filtered,
       searchQuery: trimmedQuery,
+    ));
+  }
+
+  /// Sets the quick modality filter and updates displayed jobs in memory,
+  /// preserving any active text search query.
+  void setModalityFilter(JobModalityFilter modality) {
+    final currentState = state;
+    if (currentState is! JobsLoaded) return;
+
+    final filtered = _applyFilter(
+      currentState.effectiveAllJobs,
+      currentState.searchQuery,
+      modality,
+    );
+
+    emit(currentState.copyWith(
+      jobs: filtered,
+      selectedModality: modality,
+    ));
+  }
+
+  /// Resets both search text query and modality filter to show all active jobs.
+  void resetFilters() {
+    final currentState = state;
+    if (currentState is! JobsLoaded) return;
+
+    emit(currentState.copyWith(
+      jobs: currentState.effectiveAllJobs,
+      clearSearchQuery: true,
+      selectedModality: JobModalityFilter.all,
     ));
   }
 
@@ -211,17 +270,33 @@ class JobsCubit extends Cubit<JobsState> {
     }
   }
 
-  List<JobItem> _applyFilter(List<JobItem> items, String? query) {
-    if (query == null || query.trim().isEmpty) return items;
-    final lower = query.trim().toLowerCase();
+  List<JobItem> _applyFilter(
+    List<JobItem> items,
+    String? query,
+    JobModalityFilter modality,
+  ) {
+    final hasQuery = query != null && query.trim().isNotEmpty;
+    final lower = hasQuery ? query.trim().toLowerCase() : null;
+
     return items.where((job) {
-      final titleMatch = job.title.toLowerCase().contains(lower);
+      // 1. Modality filter check
+      if (!job.matchesModality(modality)) {
+        return false;
+      }
+
+      // 2. Text query check
+      if (!hasQuery) {
+        return true;
+      }
+
+      final titleMatch = job.title.toLowerCase().contains(lower!);
       final companyMatch = job.companyName.toLowerCase().contains(lower);
       final locationMatch =
           job.location != null && job.location!.toLowerCase().contains(lower);
       final platformMatch = job.platform.toLowerCase().contains(lower);
       final notesMatch =
           job.notes != null && job.notes!.toLowerCase().contains(lower);
+
       return titleMatch ||
           companyMatch ||
           locationMatch ||
