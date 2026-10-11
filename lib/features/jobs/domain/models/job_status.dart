@@ -7,7 +7,7 @@ enum JobStatus {
   applied('applied', 'Candidatado'),
 
   /// Screening, technical or cultural interview stage.
-  interview('interview', 'Entrevista'),
+  interview('interviewing', 'Entrevista'),
 
   /// Job proposal / job offer received.
   offer('offer', 'Proposta'),
@@ -27,6 +27,9 @@ enum JobStatus {
   static JobStatus fromString(String? raw) {
     if (raw == null) return JobStatus.newJob;
     final normalized = raw.trim().toLowerCase();
+    if (normalized == 'interview' || normalized == 'interviewing') {
+      return JobStatus.interview;
+    }
     for (final status in JobStatus.values) {
       if (status.value == normalized) {
         return status;

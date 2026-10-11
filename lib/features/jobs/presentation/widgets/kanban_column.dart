@@ -31,77 +31,97 @@ class KanbanColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusColor = context.kanbanColors.colorFor(status);
 
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.slate900,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.slate700.withAlpha(120)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Column Header (fixo no topo)
-          _buildHeader(context, statusColor),
+    return DragTarget<JobItem>(
+      hitTestBehavior: HitTestBehavior.translucent,
+      onWillAcceptWithDetails: (details) => details.data.status != status,
+      onAcceptWithDetails: (details) {
+        if (onJobDropped != null) {
+          onJobDropped!(details.data, status);
+        } else {
+          onMoveJobStatus?.call(details.data, status);
+        }
+      },
+      builder: (context, candidateData, rejectedData) {
+        final isHovered = candidateData.isNotEmpty;
 
-          const Divider(
-            height: 1,
-            thickness: 1,
-            color: AppColors.slate700,
-          ),
-
-          // Scrollable Card List with DragTarget
-          Expanded(
-            child: DragTarget<JobItem>(
-              onWillAcceptWithDetails: (details) =>
-                  details.data.status != status,
-              onAcceptWithDetails: (details) {
-                onJobDropped?.call(details.data, status);
-                onMoveJobStatus?.call(details.data, status);
-              },
-              builder: (context, candidateData, rejectedData) {
-                final isHovered = candidateData.isNotEmpty;
-
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  color: isHovered
-                      ? statusColor.withAlpha(20)
-                      : Colors.transparent,
-                  child: jobs.isEmpty
-                      ? _buildEmptyState(context, statusColor)
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(12),
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          primary: false,
-                          itemCount: jobs.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final job = jobs[index];
-                            return JobCard(
-                              key: ValueKey('job_card_${job.jobId}'),
-                              job: job,
-                              onMoveStatus: (newStatus) =>
-                                  onMoveJobStatus?.call(job, newStatus),
-                              onArchive: () => onArchiveJob?.call(job),
-                              onOpenUrl: () => onOpenJobUrl?.call(job),
-                            );
-                          },
-                        ),
-                );
-              },
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: isHovered
+                ? statusColor.withAlpha(20)
+                : AppColors.slate900,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isHovered
+                  ? statusColor
+                  : AppColors.slate700.withAlpha(120),
+              width: isHovered ? 2.0 : 1.0,
             ),
+            boxShadow: isHovered
+                ? [
+                    BoxShadow(
+                      color: statusColor.withAlpha(70),
+                      blurRadius: 16,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : null,
           ),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Column Header (fixo no topo)
+              _buildHeader(context, statusColor, isHovered: isHovered),
+
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: isHovered
+                    ? statusColor.withAlpha(100)
+                    : AppColors.slate700,
+              ),
+
+              // Scrollable Card List
+              Expanded(
+                child: jobs.isEmpty
+                    ? _buildEmptyState(context, statusColor)
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(12),
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        primary: false,
+                        itemCount: jobs.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final job = jobs[index];
+                          return JobCard(
+                            key: ValueKey('job_card_${job.jobId}'),
+                            job: job,
+                            onMoveStatus: (newStatus) =>
+                                onMoveJobStatus?.call(job, newStatus),
+                            onArchive: () => onArchiveJob?.call(job),
+                            onOpenUrl: () => onOpenJobUrl?.call(job),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader(BuildContext context, Color statusColor) {
+  Widget _buildHeader(
+    BuildContext context,
+    Color statusColor, {
+    bool isHovered = false,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.slate850,
+        color: isHovered ? statusColor.withAlpha(35) : AppColors.slate850,
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(14),
           topRight: Radius.circular(14),
@@ -142,9 +162,15 @@ class KanbanColumn extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: AppColors.slate800,
+              color: isHovered
+                  ? statusColor.withAlpha(50)
+                  : AppColors.slate800,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.slate700),
+              border: Border.all(
+                color: isHovered
+                    ? statusColor.withAlpha(160)
+                    : AppColors.slate700,
+              ),
             ),
             child: Text(
               '${jobs.length}',

@@ -144,7 +144,7 @@ void main() {
           )).called(1);
     });
 
-    test('optimistically removes job when archiveJob succeeds', () async {
+    test('optimistically removes job and emits successMessage when archiveJob succeeds', () async {
       when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1, testJob2]);
       when(() => mockRepository.toggleJobArchived(
             jobId: '1',
@@ -155,7 +155,10 @@ void main() {
 
       expectLater(
         cubit.stream,
-        emits(JobsLoaded([testJob2])),
+        emitsInOrder([
+          JobsLoaded([testJob2]),
+          JobsLoaded([testJob2], successMessage: 'Vaga arquivada com sucesso.'),
+        ]),
       );
 
       await cubit.archiveJob('1');
@@ -229,6 +232,24 @@ void main() {
       cubit.clearErrorMessage();
       state = cubit.state as JobsLoaded;
       expect(state.errorMessage, isNull);
+    });
+
+    test('clears success message when clearSuccessMessage is called', () async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1, testJob2]);
+      when(() => mockRepository.toggleJobArchived(
+            jobId: '1',
+            isArchived: true,
+          )).thenAnswer((_) async {});
+
+      await cubit.loadJobs();
+      await cubit.archiveJob('1');
+
+      var state = cubit.state as JobsLoaded;
+      expect(state.successMessage, 'Vaga arquivada com sucesso.');
+
+      cubit.clearSuccessMessage();
+      state = cubit.state as JobsLoaded;
+      expect(state.successMessage, isNull);
     });
 
     test('updates interaction and reloads jobs', () async {

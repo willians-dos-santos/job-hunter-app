@@ -19,7 +19,7 @@ void main() {
       expect(json, {
         'job_id': 'job-55',
         'user_id': 'usr-42',
-        'status': 'interview',
+        'status': 'interviewing',
         'notes': 'Preparar case study de arquitetura',
         'applied_at': date.toIso8601String(),
       });

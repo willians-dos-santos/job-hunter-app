@@ -298,7 +298,7 @@ void main() {
   });
 
   group('JobRemoteDataSource - updateJobStatus', () {
-    test('upserts status change payload with onConflict job_id', () async {
+    test('upserts status change payload with onConflict user_id,job_id', () async {
       dynamic capturedPayload;
       String? capturedConflict;
 
@@ -321,9 +321,9 @@ void main() {
       expect(capturedPayload, {
         'job_id': 'job-123',
         'user_id': 'usr-test-123',
-        'status': 'interview',
+        'status': 'interviewing',
       });
-      expect(capturedConflict, 'job_id');
+      expect(capturedConflict, 'user_id,job_id');
       verify(() => mockClient.from(AppConstants.userJobInteractionsTable)).called(1);
     });
 
@@ -393,8 +393,9 @@ void main() {
   });
 
   group('JobRemoteDataSource - updateJobNotes', () {
-    test('upserts notes payload with onConflict job_id', () async {
+    test('upserts notes payload with onConflict user_id,job_id', () async {
       dynamic capturedPayload;
+      String? capturedConflict;
 
       final fakeUpsert = FakePostgrestFilterBuilder<void>(data: null);
 
@@ -403,6 +404,7 @@ void main() {
             onConflict: any(named: 'onConflict'),
           )).thenAnswer((invocation) {
         capturedPayload = invocation.positionalArguments[0];
+        capturedConflict = invocation.namedArguments[#onConflict] as String?;
         return fakeUpsert;
       });
 
@@ -416,6 +418,7 @@ void main() {
         'user_id': 'usr-test-123',
         'notes': 'Feedback positivo na primeira fase',
       });
+      expect(capturedConflict, 'user_id,job_id');
       verify(() => mockClient.from(AppConstants.userJobInteractionsTable)).called(1);
     });
 
@@ -440,8 +443,9 @@ void main() {
   });
 
   group('JobRemoteDataSource - toggleJobArchived', () {
-    test('upserts is_archived: true payload with onConflict job_id', () async {
+    test('upserts is_archived: true payload with onConflict user_id,job_id', () async {
       dynamic capturedPayload;
+      String? capturedConflict;
 
       final fakeUpsert = FakePostgrestFilterBuilder<void>(data: null);
 
@@ -450,6 +454,7 @@ void main() {
             onConflict: any(named: 'onConflict'),
           )).thenAnswer((invocation) {
         capturedPayload = invocation.positionalArguments[0];
+        capturedConflict = invocation.namedArguments[#onConflict] as String?;
         return fakeUpsert;
       });
 
@@ -463,11 +468,13 @@ void main() {
         'user_id': 'usr-test-123',
         'is_archived': true,
       });
+      expect(capturedConflict, 'user_id,job_id');
       verify(() => mockClient.from(AppConstants.userJobInteractionsTable)).called(1);
     });
 
-    test('upserts is_archived: false payload with onConflict job_id', () async {
+    test('upserts is_archived: false payload with onConflict user_id,job_id', () async {
       dynamic capturedPayload;
+      String? capturedConflict;
 
       final fakeUpsert = FakePostgrestFilterBuilder<void>(data: null);
 
@@ -476,6 +483,7 @@ void main() {
             onConflict: any(named: 'onConflict'),
           )).thenAnswer((invocation) {
         capturedPayload = invocation.positionalArguments[0];
+        capturedConflict = invocation.namedArguments[#onConflict] as String?;
         return fakeUpsert;
       });
 
@@ -489,6 +497,7 @@ void main() {
         'user_id': 'usr-test-123',
         'is_archived': false,
       });
+      expect(capturedConflict, 'user_id,job_id');
     });
 
     test('wraps PostgrestException into JobMutationFailure', () async {
@@ -512,8 +521,9 @@ void main() {
   });
 
   group('JobRemoteDataSource - upsertInteraction', () {
-    test('upserts interaction model payload', () async {
+    test('upserts interaction model payload with onConflict user_id,job_id', () async {
       dynamic capturedPayload;
+      String? capturedConflict;
 
       final fakeUpsert = FakePostgrestFilterBuilder<void>(data: null);
 
@@ -522,6 +532,7 @@ void main() {
             onConflict: any(named: 'onConflict'),
           )).thenAnswer((invocation) {
         capturedPayload = invocation.positionalArguments[0];
+        capturedConflict = invocation.namedArguments[#onConflict] as String?;
         return fakeUpsert;
       });
 
@@ -537,6 +548,7 @@ void main() {
       expect(capturedPayload['user_id'], 'usr-test-123');
       expect(capturedPayload['status'], 'offer');
       expect(capturedPayload['notes'], 'Oferta final recebida');
+      expect(capturedConflict, 'user_id,job_id');
     });
 
     test('wraps PostgrestException into JobMutationFailure', () async {

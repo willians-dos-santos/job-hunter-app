@@ -6,6 +6,7 @@ import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/env_config.dart';
 import '../../../../core/services/supabase_service.dart';
 import '../../domain/models/job_item.dart';
+import '../../domain/models/job_status.dart';
 import '../../domain/models/user_job_interaction.dart';
 
 /// Contract for remote Supabase queries and mutations on jobs.
@@ -209,22 +210,26 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
   }) async {
     try {
       final effectiveUserId = _resolveUserId(userId);
+      final normalizedStatus = JobStatus.fromString(newStatus).value;
       final payload = <String, dynamic>{
         'job_id': jobId,
         'user_id': ?effectiveUserId,
-        'status': newStatus,
+        'status': normalizedStatus,
       };
 
-      if (newStatus == 'applied') {
+      if (normalizedStatus == 'applied') {
         payload['applied_at'] = DateTime.now().toUtc().toIso8601String();
       }
 
+      debugPrint(
+        '[JobRemoteDataSource.updateJobStatus] status: "$normalizedStatus" (raw parameter: "$newStatus"), payload: $payload',
+      );
       debugPrint(
         '[JobRemoteDataSource.updateJobStatus] Upserting to ${AppConstants.userJobInteractionsTable}: $payload',
       );
       await _client
           .from(AppConstants.userJobInteractionsTable)
-          .upsert(payload, onConflict: 'job_id');
+          .upsert(payload, onConflict: 'user_id,job_id');
       debugPrint('[JobRemoteDataSource.updateJobStatus] Upsert successful');
     } on PostgrestException catch (e) {
       debugPrint(
@@ -260,7 +265,7 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       );
       await _client
           .from(AppConstants.userJobInteractionsTable)
-          .upsert(payload, onConflict: 'job_id');
+          .upsert(payload, onConflict: 'user_id,job_id');
       debugPrint('[JobRemoteDataSource.updateJobNotes] Upsert successful');
     } on PostgrestException catch (e) {
       debugPrint(
@@ -296,7 +301,7 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       );
       await _client
           .from(AppConstants.userJobInteractionsTable)
-          .upsert(payload, onConflict: 'job_id');
+          .upsert(payload, onConflict: 'user_id,job_id');
       debugPrint('[JobRemoteDataSource.toggleJobArchived] Upsert successful');
     } on PostgrestException catch (e) {
       debugPrint(
@@ -324,13 +329,20 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       if (effectiveUserId != null) {
         payload['user_id'] = effectiveUserId;
       }
+      if (payload.containsKey('status') && payload['status'] != null) {
+        payload['status'] =
+            JobStatus.fromString(payload['status'].toString()).value;
+      }
 
+      debugPrint(
+        '[JobRemoteDataSource.upsertInteraction] status: "${payload['status']}", payload: $payload',
+      );
       debugPrint(
         '[JobRemoteDataSource.upsertInteraction] Upserting to ${AppConstants.userJobInteractionsTable}: $payload',
       );
       await _client
           .from(AppConstants.userJobInteractionsTable)
-          .upsert(payload, onConflict: 'job_id');
+          .upsert(payload, onConflict: 'user_id,job_id');
       debugPrint('[JobRemoteDataSource.upsertInteraction] Upsert successful');
     } on PostgrestException catch (e) {
       debugPrint(

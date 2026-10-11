@@ -89,23 +89,52 @@ class _JobsKanbanPageState extends State<JobsKanbanPage> {
       body: BlocConsumer<JobsCubit, JobsState>(
         bloc: cubit,
         listener: (context, state) {
-          if (state is JobsLoaded && state.errorMessage != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                backgroundColor: AppColors.kanbanRejected,
-                behavior: SnackBarBehavior.floating,
-                content: Text(
-                  state.errorMessage!,
-                  style: const TextStyle(color: Colors.white),
+          if (state is JobsLoaded) {
+            if (state.errorMessage != null) {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: AppColors.kanbanRejected,
+                  behavior: SnackBarBehavior.floating,
+                  content: Text(
+                    state.errorMessage!,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  action: SnackBarAction(
+                    label: 'OK',
+                    textColor: Colors.white,
+                    onPressed: () => cubit.clearErrorMessage(),
+                  ),
                 ),
-                action: SnackBarAction(
-                  label: 'OK',
-                  textColor: Colors.white,
-                  onPressed: () => cubit.clearErrorMessage(),
+              );
+              cubit.clearErrorMessage();
+            } else if (state.successMessage != null) {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: AppColors.slate800,
+                  behavior: SnackBarBehavior.floating,
+                  content: Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: AppColors.terminalCyan,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          state.successMessage!,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                  duration: const Duration(seconds: 3),
                 ),
-              ),
-            );
-            cubit.clearErrorMessage();
+              );
+              cubit.clearSuccessMessage();
+            }
           }
         },
         builder: (context, state) {

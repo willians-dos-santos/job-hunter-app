@@ -26,6 +26,7 @@ final class JobsLoaded extends JobsState {
     this.allJobs = const [],
     this.searchQuery,
     this.errorMessage,
+    this.successMessage,
   });
 
   /// Active list of jobs currently displayed (filtered by search query and non-archived).
@@ -39,6 +40,9 @@ final class JobsLoaded extends JobsState {
 
   /// Optional error notification message from an optimistic action rollback.
   final String? errorMessage;
+
+  /// Optional success confirmation message for user notifications.
+  final String? successMessage;
 
   /// Effective list of all jobs, defaulting to [jobs] if [allJobs] is empty.
   List<JobItem> get effectiveAllJobs => allJobs.isEmpty ? jobs : allJobs;
@@ -54,7 +58,9 @@ final class JobsLoaded extends JobsState {
     List<JobItem>? allJobs,
     String? searchQuery,
     String? errorMessage,
+    String? successMessage,
     bool clearErrorMessage = false,
+    bool clearSuccessMessage = false,
   }) {
     return JobsLoaded(
       jobs ?? this.jobs,
@@ -62,6 +68,8 @@ final class JobsLoaded extends JobsState {
       searchQuery: searchQuery ?? this.searchQuery,
       errorMessage:
           clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
+      successMessage:
+          clearSuccessMessage ? null : (successMessage ?? this.successMessage),
     );
   }
 
@@ -72,7 +80,8 @@ final class JobsLoaded extends JobsState {
         listEquals(other.jobs, jobs) &&
         listEquals(other.effectiveAllJobs, effectiveAllJobs) &&
         other.searchQuery == searchQuery &&
-        other.errorMessage == errorMessage;
+        other.errorMessage == errorMessage &&
+        other.successMessage == successMessage;
   }
 
   @override
@@ -81,6 +90,7 @@ final class JobsLoaded extends JobsState {
         Object.hashAll(effectiveAllJobs),
         searchQuery,
         errorMessage,
+        successMessage,
       );
 }
 

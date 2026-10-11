@@ -202,12 +202,15 @@ class JobCard extends StatelessWidget {
 
     return LongPressDraggable<JobItem>(
       data: job,
-      delay: const Duration(milliseconds: 250),
+      hapticFeedbackOnStart: true,
+      delay: const Duration(milliseconds: 200),
       feedback: Material(
         color: Colors.transparent,
+        elevation: 8,
+        borderRadius: BorderRadius.circular(12),
         child: SizedBox(
           width: 280,
-          child: Opacity(opacity: 0.9, child: cardContent),
+          child: Opacity(opacity: 0.92, child: cardContent),
         ),
       ),
       childWhenDragging: Opacity(
@@ -220,6 +223,7 @@ class JobCard extends StatelessWidget {
 
   Widget _buildActionMenu(BuildContext context) {
     return PopupMenuButton<String>(
+      key: ValueKey('job_card_menu_${job.jobId}'),
       icon: const Icon(
         Icons.more_vert_rounded,
         size: 18,

@@ -172,7 +172,7 @@ void main() {
       when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1]);
       when(() => mockRepository.updateJobStatus(
             jobId: '1',
-            newStatus: 'interview',
+            newStatus: 'interviewing',
           )).thenThrow(Exception('Falha de escrita no Postgrest'));
 
       await cubit.loadJobs();
@@ -181,7 +181,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Trigger move that will fail and rollback
-      await cubit.moveJobStatus(jobId: '1', newStatus: 'interview');
+      await cubit.moveJobStatus(jobId: '1', newStatus: 'interviewing');
       await tester.pumpAndSettle();
 
       expect(find.byType(SnackBar), findsOneWidget);
@@ -221,6 +221,117 @@ void main() {
 
       // The last column "Rejeitada" is now scrolled into view
       expect(find.text('Rejeitada'), findsOneWidget);
+    });
+
+    testWidgets(
+        'archives job from card action menu and displays confirmation SnackBar',
+        (tester) async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.toggleJobArchived(
+            jobId: '1',
+            isArchived: true,
+          )).thenAnswer((_) async {});
+
+      await cubit.loadJobs();
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Senior Flutter Specialist'), findsOneWidget);
+
+      // Open card action menu
+      final menuButton = find.byKey(const ValueKey('job_card_menu_1'));
+      expect(menuButton, findsOneWidget);
+      await tester.tap(menuButton);
+      await tester.pumpAndSettle();
+
+      // Tap 'Arquivar vaga'
+      expect(find.text('Arquivar vaga'), findsOneWidget);
+      await tester.tap(find.text('Arquivar vaga'));
+      await tester.pumpAndSettle();
+
+      // Card is removed from Kanban view
+      expect(find.text('Senior Flutter Specialist'), findsNothing);
+
+      // Confirmation SnackBar is displayed
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('Vaga arquivada com sucesso.'), findsOneWidget);
+
+      verify(() => mockRepository.toggleJobArchived(
+            jobId: '1',
+            isArchived: true,
+          )).called(1);
+    });
+
+    testWidgets(
+        'moves job status from card action menu and updates funnel',
+        (tester) async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.updateJobStatus(
+            jobId: '1',
+            newStatus: 'interviewing',
+          )).thenAnswer((_) async {});
+
+      await cubit.loadJobs();
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      // Open menu on job in 'Nova' column
+      final menuButton = find.byKey(const ValueKey('job_card_menu_1'));
+      await tester.tap(menuButton);
+      await tester.pumpAndSettle();
+
+      // Tap 'Mover para Entrevista'
+      await tester.tap(find.text('Mover para Entrevista'));
+      await tester.pumpAndSettle();
+
+      verify(() => mockRepository.updateJobStatus(
+            jobId: '1',
+            newStatus: 'interviewing',
+          )).called(1);
+    });
+
+    testWidgets(
+        'moves job status when card is dragged and dropped to another column',
+        (tester) async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.updateJobStatus(
+            jobId: '1',
+            newStatus: 'interviewing',
+          )).thenAnswer((_) async {});
+
+      await cubit.loadJobs();
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final cardFinder = find.text('Senior Flutter Specialist');
+      expect(cardFinder, findsOneWidget);
+
+      final interviewColFinder =
+          find.byKey(const ValueKey('kanban_col_interviewing'));
+      expect(interviewColFinder, findsOneWidget);
+
+      // Start drag gesture
+      final gesture = await tester.startGesture(tester.getCenter(cardFinder));
+      await tester.pump(const Duration(milliseconds: 300)); // Activate long press drag
+
+      // Move over to the interview column
+      await gesture.moveTo(tester.getCenter(interviewColFinder));
+      await tester.pump();
+
+      // Release drop
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      verify(() => mockRepository.updateJobStatus(
+            jobId: '1',
+            newStatus: 'interviewing',
+          )).called(1);
     });
   });
 }

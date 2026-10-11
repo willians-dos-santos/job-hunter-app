@@ -34,7 +34,7 @@ void main() {
     // Verify Kanban status chips
     expect(find.textContaining('Nova (new)'), findsOneWidget);
     expect(find.textContaining('Candidatado (applied)'), findsOneWidget);
-    expect(find.textContaining('Entrevista (interview)'), findsOneWidget);
+    expect(find.textContaining('Entrevista (interviewing)'), findsOneWidget);
     expect(find.textContaining('Proposta (offer)'), findsOneWidget);
     expect(find.textContaining('Rejeitada (rejected)'), findsOneWidget);
   });

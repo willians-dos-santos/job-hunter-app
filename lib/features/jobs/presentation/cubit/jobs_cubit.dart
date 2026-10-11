@@ -96,6 +96,12 @@ class JobsCubit extends Cubit<JobsState> {
         jobId: jobId,
         isArchived: true,
       );
+      emit(JobsLoaded(
+        updatedJobs,
+        allJobs: updatedAllJobs,
+        searchQuery: currentState.searchQuery,
+        successMessage: 'Vaga arquivada com sucesso.',
+      ));
     } catch (e) {
       emit(JobsLoaded(
         previousJobs,
@@ -134,6 +140,14 @@ class JobsCubit extends Cubit<JobsState> {
     final currentState = state;
     if (currentState is JobsLoaded && currentState.errorMessage != null) {
       emit(currentState.copyWith(clearErrorMessage: true));
+    }
+  }
+
+  /// Clears any transient success confirmation message on [JobsLoaded].
+  void clearSuccessMessage() {
+    final currentState = state;
+    if (currentState is JobsLoaded && currentState.successMessage != null) {
+      emit(currentState.copyWith(clearSuccessMessage: true));
     }
   }
 

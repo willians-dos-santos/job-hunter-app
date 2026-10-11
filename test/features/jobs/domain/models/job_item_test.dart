@@ -96,7 +96,7 @@ void main() {
       expect(json['job_url'], 'https://linkedin.com/jobs/view/101');
       expect(json['location'], 'Remoto - Brasil');
       expect(json['salary_text'], 'R\$ 15.000 - R\$ 18.000');
-      expect(json['status'], 'interview');
+      expect(json['status'], 'interviewing');
       expect(json['notes'], 'Primeira entrevista técnica realizada com sucesso.');
       expect(json['applied_at'], contains('2026-10-05T14:30:00'));
       expect(json['created_at'], contains('2026-10-01T09:00:00'));

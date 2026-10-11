@@ -177,5 +177,148 @@ void main() {
       expect(find.text('Vaga número 15'), findsOneWidget);
       expect(find.text('Nova'), findsOneWidget);
     });
+
+    testWidgets('triggers onJobDropped when a JobItem is dropped onto the DragTarget',
+        (tester) async {
+      JobItem? droppedJob;
+      JobStatus? droppedStatus;
+
+      await tester.pumpWidget(
+        buildSubject(
+          status: JobStatus.offer,
+          jobs: const [],
+          onJobDropped: (job, status) {
+            droppedJob = job;
+            droppedStatus = status;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final dragTargetFinder = find.byType(DragTarget<JobItem>);
+      expect(dragTargetFinder, findsOneWidget);
+
+      final dragTarget =
+          tester.widget<DragTarget<JobItem>>(dragTargetFinder);
+
+      // Accepts different status
+      final willAccept = dragTarget.onWillAcceptWithDetails!(
+        DragTargetDetails<JobItem>(
+          data: testJob1,
+          offset: Offset.zero,
+        ),
+      );
+      expect(willAccept, isTrue);
+
+      // Rejects same status
+      final willReject = dragTarget.onWillAcceptWithDetails!(
+        DragTargetDetails<JobItem>(
+          data: testJob1.copyWith(status: JobStatus.offer),
+          offset: Offset.zero,
+        ),
+      );
+      expect(willReject, isFalse);
+
+      // Triggers drop callback
+      dragTarget.onAcceptWithDetails!(
+        DragTargetDetails<JobItem>(
+          data: testJob1,
+          offset: Offset.zero,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(droppedJob?.jobId, '1');
+      expect(droppedStatus, JobStatus.offer);
+    });
+
+    testWidgets('falls back to onMoveJobStatus when onJobDropped is not provided',
+        (tester) async {
+      JobItem? movedJob;
+      JobStatus? movedStatus;
+
+      await tester.pumpWidget(
+        buildSubject(
+          status: JobStatus.offer,
+          jobs: const [],
+          onMoveJobStatus: (job, status) {
+            movedJob = job;
+            movedStatus = status;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final dragTarget =
+          tester.widget<DragTarget<JobItem>>(find.byType(DragTarget<JobItem>));
+
+      dragTarget.onAcceptWithDetails!(
+        DragTargetDetails<JobItem>(
+          data: testJob1,
+          offset: Offset.zero,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(movedJob?.jobId, '1');
+      expect(movedStatus, JobStatus.offer);
+    });
+
+    testWidgets('supports drag and drop gesture from child card to another column',
+        (tester) async {
+      JobItem? droppedJob;
+      JobStatus? targetStatus;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: Row(
+              children: [
+                SizedBox(
+                  width: 300,
+                  height: 600,
+                  child: KanbanColumn(
+                    status: JobStatus.newJob,
+                    jobs: [testJob1.copyWith(status: JobStatus.newJob)],
+                  ),
+                ),
+                SizedBox(
+                  width: 300,
+                  height: 600,
+                  child: KanbanColumn(
+                    status: JobStatus.applied,
+                    jobs: const [],
+                    onJobDropped: (job, status) {
+                      droppedJob = job;
+                      targetStatus = status;
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final cardFinder = find.text('Flutter Developer');
+      expect(cardFinder, findsOneWidget);
+
+      // Start drag gesture on the card
+      final gesture = await tester.startGesture(tester.getCenter(cardFinder));
+      await tester.pump(const Duration(milliseconds: 300)); // Trigger long press drag
+
+      // Move over to the second column (offset around x = 450, y = 200)
+      await gesture.moveTo(const Offset(450, 200));
+      await tester.pump();
+
+      // Release drop over the second column
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(droppedJob?.jobId, '1');
+      expect(targetStatus, JobStatus.applied);
+    });
   });
 }
