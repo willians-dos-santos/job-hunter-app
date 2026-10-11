@@ -12,6 +12,7 @@ class JobCard extends StatelessWidget {
   const JobCard({
     super.key,
     required this.job,
+    this.onTap,
     this.onMoveStatus,
     this.onArchive,
     this.onOpenUrl,
@@ -19,24 +20,81 @@ class JobCard extends StatelessWidget {
   });
 
   final JobItem job;
+  final VoidCallback? onTap;
   final ValueChanged<JobStatus>? onMoveStatus;
   final VoidCallback? onArchive;
   final VoidCallback? onOpenUrl;
   final bool enableDrag;
+
+  String _sanitizeUrl(String rawUrl) {
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return trimmed;
+    final lower = trimmed.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return trimmed;
+    }
+    return 'https://$trimmed';
+  }
 
   Future<void> _handleOpenUrl(BuildContext context) async {
     if (onOpenUrl != null) {
       onOpenUrl!();
       return;
     }
-    if (job.jobUrl.isEmpty) return;
+    final rawUrl = job.jobUrl.trim();
+    if (rawUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('URL da vaga não disponível.'),
+          backgroundColor: AppColors.kanbanRejected,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     try {
-      final uri = Uri.parse(job.jobUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final sanitizedUrl = _sanitizeUrl(rawUrl);
+      final uri = Uri.parse(sanitizedUrl);
+
+      // 1. Tentar abrir via Custom Tabs nativas (inAppBrowserView)
+      bool launched = false;
+      try {
+        launched = await launchUrl(
+          uri,
+          mode: LaunchMode.inAppBrowserView,
+          browserConfiguration: const BrowserConfiguration(showTitle: true),
+        );
+      } catch (_) {
+        launched = false;
       }
-    } catch (_) {
-      // Falha graciosa na abertura da url
+
+      // 2. Fallback para externalApplication caso inAppBrowserView não abra
+      if (!launched) {
+        launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      }
+
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível abrir o link da vaga externa.'),
+            backgroundColor: AppColors.kanbanRejected,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao abrir o link da vaga: $e'),
+            backgroundColor: AppColors.kanbanRejected,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -44,20 +102,26 @@ class JobCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusColor = context.kanbanColors.colorFor(job.status);
 
-    final cardContent = Container(
-      decoration: BoxDecoration(
-        color: AppColors.slate800,
+    final cardContent = Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.slate700),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(50),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.slate800,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.slate700),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(50),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Top accent strip & actions
@@ -196,7 +260,9 @@ class JobCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ),
+  ),
+);
 
     if (!enableDrag) return cardContent;
 

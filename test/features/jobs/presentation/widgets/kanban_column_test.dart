@@ -43,6 +43,7 @@ void main() {
   Widget buildSubject({
     required JobStatus status,
     required List<JobItem> jobs,
+    void Function(JobItem)? onJobTap,
     void Function(JobItem, JobStatus)? onMoveJobStatus,
     void Function(JobItem)? onArchiveJob,
     void Function(JobItem, JobStatus)? onJobDropped,
@@ -57,6 +58,7 @@ void main() {
             child: KanbanColumn(
               status: status,
               jobs: jobs,
+              onJobTap: onJobTap,
               onMoveJobStatus: onMoveJobStatus,
               onArchiveJob: onArchiveJob,
               onJobDropped: onJobDropped,
@@ -68,6 +70,23 @@ void main() {
   }
 
   group('KanbanColumn Widget', () {
+    testWidgets('triggers onJobTap when a job card in the column is tapped',
+        (tester) async {
+      JobItem? tappedJob;
+      await tester.pumpWidget(
+        buildSubject(
+          status: JobStatus.interview,
+          jobs: [testJob1],
+          onJobTap: (job) => tappedJob = job,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Flutter Developer'));
+      await tester.pumpAndSettle();
+
+      expect(tappedJob, equals(testJob1));
+    });
     testWidgets('renders column header with status label and card count',
         (tester) async {
       await tester.pumpWidget(

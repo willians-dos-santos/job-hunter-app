@@ -182,6 +182,7 @@ class JobItem {
     DateTime? publishedAt,
     DateTime? createdAt,
     bool? isArchived,
+    bool clearNotes = false,
   }) {
     return JobItem(
       jobId: jobId ?? this.jobId,
@@ -193,7 +194,7 @@ class JobItem {
       location: location ?? this.location,
       salaryText: salaryText ?? this.salaryText,
       status: status ?? this.status,
-      notes: notes ?? this.notes,
+      notes: clearNotes ? null : (notes ?? this.notes),
       appliedAt: appliedAt ?? this.appliedAt,
       publishedAt: publishedAt ?? this.publishedAt,
       createdAt: createdAt ?? this.createdAt,

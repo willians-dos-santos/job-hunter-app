@@ -33,6 +33,7 @@ void main() {
 
   Widget buildSubject({
     JobItem? job,
+    VoidCallback? onTap,
     ValueChanged<JobStatus>? onMoveStatus,
     VoidCallback? onArchive,
     VoidCallback? onOpenUrl,
@@ -46,6 +47,7 @@ void main() {
             child: JobCard(
               job: job ?? testJob,
               enableDrag: false,
+              onTap: onTap,
               onMoveStatus: onMoveStatus,
               onArchive: onArchive,
               onOpenUrl: onOpenUrl,
@@ -57,6 +59,21 @@ void main() {
   }
 
   group('JobCard Widget', () {
+    testWidgets('triggers onTap callback when card is tapped', (tester) async {
+      bool tapped = false;
+
+      await tester.pumpWidget(
+        buildSubject(
+          onTap: () => tapped = true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Senior Flutter Architect'));
+      await tester.pumpAndSettle();
+
+      expect(tapped, isTrue);
+    });
     testWidgets('renders job details and badges correctly', (tester) async {
       await tester.pumpWidget(buildSubject());
       await tester.pumpAndSettle();

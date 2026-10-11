@@ -252,6 +252,53 @@ void main() {
       expect(state.successMessage, isNull);
     });
 
+    test('optimistically updates notes and emits successMessage when updateJobNotes succeeds', () async {
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.updateJobNotes(
+            jobId: '1',
+            notes: 'Entrevista marcada para terça-feira.',
+          )).thenAnswer((_) async {});
+
+      await cubit.loadJobs();
+      await cubit.updateJobNotes(
+        jobId: '1',
+        notes: 'Entrevista marcada para terça-feira.',
+      );
+
+      verify(() => mockRepository.updateJobNotes(
+            jobId: '1',
+            notes: 'Entrevista marcada para terça-feira.',
+          )).called(1);
+
+      final state = cubit.state as JobsLoaded;
+      expect(state.jobs.first.notes, 'Entrevista marcada para terça-feira.');
+      expect(state.successMessage, 'Anotações salvas com sucesso.');
+    });
+
+    test('rolls back notes and emits errorMessage when updateJobNotes fails', () async {
+      final jobWithInitialNotes = testJob1.copyWith(notes: 'Nota anterior');
+      when(() => mockRepository.getJobs()).thenAnswer((_) async => [jobWithInitialNotes]);
+      when(() => mockRepository.updateJobNotes(
+            jobId: '1',
+            notes: 'Nova nota com falha',
+          )).thenThrow(Exception('Supabase write failure'));
+
+      await cubit.loadJobs();
+      await cubit.updateJobNotes(
+        jobId: '1',
+        notes: 'Nova nota com falha',
+      );
+
+      verify(() => mockRepository.updateJobNotes(
+            jobId: '1',
+            notes: 'Nova nota com falha',
+          )).called(1);
+
+      final state = cubit.state as JobsLoaded;
+      expect(state.jobs.first.notes, 'Nota anterior');
+      expect(state.errorMessage, contains('Erro ao salvar anotações'));
+    });
+
     test('updates interaction and reloads jobs', () async {
       final interaction = UserJobInteraction(jobId: '1', status: JobStatus.applied);
       when(() => mockRepository.updateJobInteraction(interaction)).thenAnswer((_) async {});

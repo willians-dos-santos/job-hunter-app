@@ -6,6 +6,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../domain/models/job_status.dart';
 import '../cubit/jobs_cubit.dart';
 import '../cubit/jobs_state.dart';
+import '../widgets/job_details_modal.dart';
 import '../widgets/kanban_column.dart';
 import '../widgets/kanban_error_view.dart';
 import '../widgets/kanban_loading_skeleton.dart';
@@ -194,6 +195,13 @@ class _JobsKanbanPageState extends State<JobsKanbanPage> {
                                     status: JobStatus.values[i],
                                     jobs: state
                                         .jobsByStatus(JobStatus.values[i]),
+                                    onJobTap: (job) {
+                                      showJobDetailsModal(
+                                        context,
+                                        job: job,
+                                        cubit: cubit,
+                                      );
+                                    },
                                     onMoveJobStatus: (job, newStatus) {
                                       cubit.moveJobStatus(
                                         jobId: job.jobId,

@@ -112,6 +112,56 @@ class JobsCubit extends Cubit<JobsState> {
     }
   }
 
+  /// Optimistically updates personal notes for [jobId] and persists via repository.
+  ///
+  /// In case of persistence failure, rolls back to previous state.
+  Future<void> updateJobNotes({
+    required String jobId,
+    required String notes,
+  }) async {
+    final currentState = state;
+    if (currentState is! JobsLoaded) return;
+
+    final previousJobs = currentState.jobs;
+    final previousAllJobs = currentState.effectiveAllJobs;
+
+    // 1. Atualização Otimista
+    final updatedAllJobs = previousAllJobs.map((job) {
+      if (job.jobId == jobId) {
+        return job.copyWith(notes: notes);
+      }
+      return job;
+    }).toList();
+
+    final updatedJobs = _applyFilter(updatedAllJobs, currentState.searchQuery);
+    emit(JobsLoaded(
+      updatedJobs,
+      allJobs: updatedAllJobs,
+      searchQuery: currentState.searchQuery,
+    ));
+
+    // 2. Persistência com Rollback em caso de erro
+    try {
+      await _repository.updateJobNotes(
+        jobId: jobId,
+        notes: notes,
+      );
+      emit(JobsLoaded(
+        updatedJobs,
+        allJobs: updatedAllJobs,
+        searchQuery: currentState.searchQuery,
+        successMessage: 'Anotações salvas com sucesso.',
+      ));
+    } catch (e) {
+      emit(JobsLoaded(
+        previousJobs,
+        allJobs: previousAllJobs,
+        searchQuery: currentState.searchQuery,
+        errorMessage: 'Erro ao salvar anotações: $e',
+      ));
+    }
+  }
+
   /// Filters loaded jobs in memory across title, company, location, and platform.
   void filterJobs(String? query) {
     final currentState = state;

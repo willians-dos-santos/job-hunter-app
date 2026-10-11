@@ -14,6 +14,7 @@ class KanbanColumn extends StatelessWidget {
     super.key,
     required this.status,
     required this.jobs,
+    this.onJobTap,
     this.onMoveJobStatus,
     this.onArchiveJob,
     this.onOpenJobUrl,
@@ -22,6 +23,7 @@ class KanbanColumn extends StatelessWidget {
 
   final JobStatus status;
   final List<JobItem> jobs;
+  final void Function(JobItem job)? onJobTap;
   final void Function(JobItem job, JobStatus newStatus)? onMoveJobStatus;
   final void Function(JobItem job)? onArchiveJob;
   final void Function(JobItem job)? onOpenJobUrl;
@@ -98,6 +100,7 @@ class KanbanColumn extends StatelessWidget {
                           return JobCard(
                             key: ValueKey('job_card_${job.jobId}'),
                             job: job,
+                            onTap: () => onJobTap?.call(job),
                             onMoveStatus: (newStatus) =>
                                 onMoveJobStatus?.call(job, newStatus),
                             onArchive: () => onArchiveJob?.call(job),

@@ -10,6 +10,7 @@ import 'package:job_hunter_app/features/jobs/domain/models/job_status.dart';
 import 'package:job_hunter_app/features/jobs/domain/repositories/jobs_repository.dart';
 import 'package:job_hunter_app/features/jobs/presentation/cubit/jobs_cubit.dart';
 import 'package:job_hunter_app/features/jobs/presentation/pages/jobs_kanban_page.dart';
+import 'package:job_hunter_app/features/jobs/presentation/widgets/job_details_modal.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/kanban_column.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/kanban_error_view.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/kanban_loading_skeleton.dart';
@@ -331,6 +332,50 @@ void main() {
       verify(() => mockRepository.updateJobStatus(
             jobId: '1',
             newStatus: 'interviewing',
+          )).called(1);
+    });
+
+    testWidgets('opens JobDetailsModal when a card is tapped and saves notes',
+        (tester) async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.updateJobNotes(
+            jobId: '1',
+            notes: 'Nova anotação sobre a vaga',
+          )).thenAnswer((_) async {});
+
+      await cubit.loadJobs();
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      // Tap on card
+      await tester.tap(find.text('Senior Flutter Specialist'));
+      await tester.pumpAndSettle();
+
+      // Modal is visible
+      expect(find.byType(JobDetailsModal), findsOneWidget);
+      expect(find.text('Notas Pessoais'), findsOneWidget);
+
+      // Edit notes and save
+      final notesField = find.byKey(const ValueKey('job_details_notes_field'));
+      await tester.enterText(notesField, 'Nova anotação sobre a vaga');
+      await tester.pumpAndSettle();
+
+      final saveButton = find.byKey(const ValueKey('job_details_save_notes_button'));
+      await tester.ensureVisible(saveButton);
+      await tester.pumpAndSettle();
+      await tester.tap(saveButton);
+      await tester.pumpAndSettle();
+
+      // Modal closed, SnackBar shown
+      expect(find.byType(JobDetailsModal), findsNothing);
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('Anotações salvas com sucesso.'), findsOneWidget);
+
+      verify(() => mockRepository.updateJobNotes(
+            jobId: '1',
+            notes: 'Nova anotação sobre a vaga',
           )).called(1);
     });
   });
