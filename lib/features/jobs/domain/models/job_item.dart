@@ -1,0 +1,201 @@
+import 'package:flutter/foundation.dart';
+
+import 'job_status.dart';
+
+/// Represents an enriched job listing viewed by the user from `v_user_jobs`.
+@immutable
+class JobItem {
+  const JobItem({
+    required this.jobId,
+    required this.title,
+    required this.companyName,
+    required this.platform,
+    required this.jobUrl,
+    required this.status,
+    required this.createdAt,
+    this.location,
+    this.salaryText,
+    this.notes,
+    this.appliedAt,
+  });
+
+  /// Factory parser for payloads originating from the `v_user_jobs` view.
+  ///
+  /// Resiliently handles missing, unexpected, and null attributes.
+  factory JobItem.fromJson(Map<String, dynamic> json) {
+    final rawJobId = json['job_id'];
+    final rawTitle = json['title'];
+    final rawCompany = json['company_name'];
+    final rawPlatform = json['platform'];
+    final rawUrl = json['job_url'];
+    final rawCreatedAt = json['created_at'];
+    final rawAppliedAt = json['applied_at'];
+
+    final createdAtParsed = rawCreatedAt != null
+        ? DateTime.tryParse(rawCreatedAt.toString())?.toLocal()
+        : null;
+
+    final appliedAtParsed = rawAppliedAt != null
+        ? DateTime.tryParse(rawAppliedAt.toString())?.toLocal()
+        : null;
+
+    return JobItem(
+      jobId: rawJobId?.toString() ?? '',
+      title: rawTitle?.toString() ?? '',
+      companyName: rawCompany?.toString() ?? '',
+      platform: rawPlatform?.toString() ?? '',
+      jobUrl: rawUrl?.toString() ?? '',
+      location: json['location']?.toString(),
+      salaryText: json['salary_text']?.toString(),
+      status: JobStatus.fromString(json['status']?.toString()),
+      notes: json['notes']?.toString(),
+      appliedAt: appliedAtParsed,
+      createdAt: createdAtParsed ?? DateTime.now(),
+    );
+  }
+
+  /// Unique identifier of the job (int or string cast to String).
+  final String jobId;
+
+  /// Job role title.
+  final String title;
+
+  /// Hiring company name.
+  final String companyName;
+
+  /// Platform where the vacancy was scraped (e.g. LinkedIn, Gupy, Catho).
+  final String platform;
+
+  /// Direct URL to the job posting.
+  final String jobUrl;
+
+  /// Geographic or remote work location (optional).
+  final String? location;
+
+  /// Formatted compensation or salary range string (optional).
+  final String? salaryText;
+
+  /// Current funnel status in the Kanban board.
+  final JobStatus status;
+
+  /// User personal notes, tips or interview feedback (optional).
+  final String? notes;
+
+  /// Timestamp when application was submitted (optional).
+  final DateTime? appliedAt;
+
+  /// Timestamp when vacancy was ingested.
+  final DateTime createdAt;
+
+  // --- Display Helpers ---
+
+  /// User-friendly formatted salary text with fallback.
+  String get displaySalary {
+    if (salaryText != null && salaryText!.trim().isNotEmpty) {
+      return salaryText!.trim();
+    }
+    return 'Não informado';
+  }
+
+  /// User-friendly location with fallback.
+  String get displayLocation {
+    if (location != null && location!.trim().isNotEmpty) {
+      return location!.trim();
+    }
+    return 'Não informado';
+  }
+
+  /// User-friendly notes with fallback.
+  String get displayNotes {
+    if (notes != null && notes!.trim().isNotEmpty) {
+      return notes!.trim();
+    }
+    return 'Sem anotações';
+  }
+
+  /// Whether the job has been submitted/applied.
+  bool get isApplied => status != JobStatus.newJob;
+
+  /// Converts this model to a JSON map.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'job_id': jobId,
+      'title': title,
+      'company_name': companyName,
+      'platform': platform,
+      'job_url': jobUrl,
+      'location': location,
+      'salary_text': salaryText,
+      'status': status.value,
+      'notes': notes,
+      'applied_at': appliedAt?.toUtc().toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+    };
+  }
+
+  /// Returns a copy of this [JobItem] with the given fields replaced.
+  JobItem copyWith({
+    String? jobId,
+    String? title,
+    String? companyName,
+    String? platform,
+    String? jobUrl,
+    String? location,
+    String? salaryText,
+    JobStatus? status,
+    String? notes,
+    DateTime? appliedAt,
+    DateTime? createdAt,
+  }) {
+    return JobItem(
+      jobId: jobId ?? this.jobId,
+      title: title ?? this.title,
+      companyName: companyName ?? this.companyName,
+      platform: platform ?? this.platform,
+      jobUrl: jobUrl ?? this.jobUrl,
+      location: location ?? this.location,
+      salaryText: salaryText ?? this.salaryText,
+      status: status ?? this.status,
+      notes: notes ?? this.notes,
+      appliedAt: appliedAt ?? this.appliedAt,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is JobItem &&
+        other.jobId == jobId &&
+        other.title == title &&
+        other.companyName == companyName &&
+        other.platform == platform &&
+        other.jobUrl == jobUrl &&
+        other.location == location &&
+        other.salaryText == salaryText &&
+        other.status == status &&
+        other.notes == notes &&
+        other.appliedAt == appliedAt &&
+        other.createdAt == createdAt;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        jobId,
+        title,
+        companyName,
+        platform,
+        jobUrl,
+        location,
+        salaryText,
+        status,
+        notes,
+        appliedAt,
+        createdAt,
+      );
+
+  @override
+  String toString() {
+    return 'JobItem(jobId: $jobId, title: $title, company: $companyName, status: ${status.value})';
+  }
+}
