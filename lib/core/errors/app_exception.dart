@@ -1,3 +1,5 @@
+export 'job_failure.dart';
+
 /// Base exception for all application-level errors.
 abstract class AppException implements Exception {
   const AppException(this.message, {this.code, this.details});

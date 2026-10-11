@@ -17,6 +17,8 @@ class JobItem {
     this.salaryText,
     this.notes,
     this.appliedAt,
+    this.publishedAt,
+    this.isArchived = false,
   });
 
   /// Factory parser for payloads originating from the `v_user_jobs` view.
@@ -30,6 +32,8 @@ class JobItem {
     final rawUrl = json['job_url'];
     final rawCreatedAt = json['created_at'];
     final rawAppliedAt = json['applied_at'];
+    final rawPublishedAt = json['published_at'];
+    final rawIsArchived = json['is_archived'];
 
     final createdAtParsed = rawCreatedAt != null
         ? DateTime.tryParse(rawCreatedAt.toString())?.toLocal()
@@ -38,6 +42,14 @@ class JobItem {
     final appliedAtParsed = rawAppliedAt != null
         ? DateTime.tryParse(rawAppliedAt.toString())?.toLocal()
         : null;
+
+    final publishedAtParsed = rawPublishedAt != null
+        ? DateTime.tryParse(rawPublishedAt.toString())?.toLocal()
+        : null;
+
+    final isArchivedParsed = rawIsArchived == true ||
+        rawIsArchived == 1 ||
+        rawIsArchived.toString().toLowerCase() == 'true';
 
     return JobItem(
       jobId: rawJobId?.toString() ?? '',
@@ -50,7 +62,9 @@ class JobItem {
       status: JobStatus.fromString(json['status']?.toString()),
       notes: json['notes']?.toString(),
       appliedAt: appliedAtParsed,
+      publishedAt: publishedAtParsed,
       createdAt: createdAtParsed ?? DateTime.now(),
+      isArchived: isArchivedParsed,
     );
   }
 
@@ -84,8 +98,14 @@ class JobItem {
   /// Timestamp when application was submitted (optional).
   final DateTime? appliedAt;
 
+  /// Timestamp when job was published (optional).
+  final DateTime? publishedAt;
+
   /// Timestamp when vacancy was ingested.
   final DateTime createdAt;
+
+  /// Whether the job has been archived/discarded by the user.
+  final bool isArchived;
 
   // --- Display Helpers ---
 
@@ -113,6 +133,9 @@ class JobItem {
     return 'Sem anotações';
   }
 
+  /// Effective date for ordering (prefers publishedAt, falls back to createdAt).
+  DateTime get effectiveDate => publishedAt ?? createdAt;
+
   /// Whether the job has been submitted/applied.
   bool get isApplied => status != JobStatus.newJob;
 
@@ -129,7 +152,9 @@ class JobItem {
       'status': status.value,
       'notes': notes,
       'applied_at': appliedAt?.toUtc().toIso8601String(),
+      'published_at': publishedAt?.toUtc().toIso8601String(),
       'created_at': createdAt.toUtc().toIso8601String(),
+      'is_archived': isArchived,
     };
   }
 
@@ -145,7 +170,9 @@ class JobItem {
     JobStatus? status,
     String? notes,
     DateTime? appliedAt,
+    DateTime? publishedAt,
     DateTime? createdAt,
+    bool? isArchived,
   }) {
     return JobItem(
       jobId: jobId ?? this.jobId,
@@ -158,7 +185,9 @@ class JobItem {
       status: status ?? this.status,
       notes: notes ?? this.notes,
       appliedAt: appliedAt ?? this.appliedAt,
+      publishedAt: publishedAt ?? this.publishedAt,
       createdAt: createdAt ?? this.createdAt,
+      isArchived: isArchived ?? this.isArchived,
     );
   }
 
@@ -176,7 +205,9 @@ class JobItem {
         other.status == status &&
         other.notes == notes &&
         other.appliedAt == appliedAt &&
-        other.createdAt == createdAt;
+        other.publishedAt == publishedAt &&
+        other.createdAt == createdAt &&
+        other.isArchived == isArchived;
   }
 
   @override
@@ -191,11 +222,13 @@ class JobItem {
         status,
         notes,
         appliedAt,
+        publishedAt,
         createdAt,
+        isArchived,
       );
 
   @override
   String toString() {
-    return 'JobItem(jobId: $jobId, title: $title, company: $companyName, status: ${status.value})';
+    return 'JobItem(jobId: $jobId, title: $title, company: $companyName, status: ${status.value}, isArchived: $isArchived)';
   }
 }

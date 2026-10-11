@@ -70,6 +70,21 @@ void main() {
       expect(interaction.status, JobStatus.offer);
       expect(interaction.notes, 'Proposta recebida!');
       expect(interaction.appliedAt, isNotNull);
+      expect(interaction.isArchived, isNull);
+    });
+
+    test('correctly serializes and deserializes isArchived', () {
+      final interaction = UserJobInteraction(
+        jobId: 'job-99',
+        status: JobStatus.rejected,
+        isArchived: true,
+      );
+
+      final json = interaction.toJson();
+      expect(json['is_archived'], isTrue);
+
+      final fromJson = UserJobInteraction.fromJson(json);
+      expect(fromJson.isArchived, isTrue);
     });
 
     test('supports copyWith, equality and hashCode', () {

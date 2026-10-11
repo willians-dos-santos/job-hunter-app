@@ -102,6 +102,20 @@ void main() {
       expect(json['created_at'], contains('2026-10-01T09:00:00'));
     });
 
+    test('correctly parses published_at, is_archived and resolves effectiveDate', () {
+      final json = <String, dynamic>{
+        ...fullJson,
+        'published_at': '2026-10-02T10:00:00.000Z',
+        'is_archived': true,
+      };
+
+      final item = JobItem.fromJson(json);
+
+      expect(item.publishedAt, isNotNull);
+      expect(item.isArchived, isTrue);
+      expect(item.effectiveDate, item.publishedAt);
+    });
+
     test('supports copyWith, equality and hashCode', () {
       final original = JobItem.fromJson(fullJson);
       final cloned = JobItem.fromJson(fullJson);

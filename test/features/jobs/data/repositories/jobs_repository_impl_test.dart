@@ -27,25 +27,34 @@ void main() {
     repository = JobsRepositoryImpl(mockDataSource);
   });
 
-  group('JobsRepositoryImpl', () {
+  group('JobsRepositoryImpl (backwards compatibility)', () {
     test('delegates getJobs to datasource', () async {
-      when(() => mockDataSource.fetchJobs(limit: 50, offset: 0))
-          .thenAnswer((_) async => [testJob]);
+      when(() => mockDataSource.getJobs(
+            limit: 20,
+            offset: 0,
+            statusFilter: null,
+            query: null,
+          )).thenAnswer((_) async => [testJob]);
 
       final result = await repository.getJobs();
 
       expect(result, [testJob]);
-      verify(() => mockDataSource.fetchJobs(limit: 50, offset: 0)).called(1);
+      verify(() => mockDataSource.getJobs(
+            limit: 20,
+            offset: 0,
+            statusFilter: null,
+            query: null,
+          )).called(1);
     });
 
     test('delegates getJobById to datasource', () async {
-      when(() => mockDataSource.fetchJobById('1'))
+      when(() => mockDataSource.getJobById('1'))
           .thenAnswer((_) async => testJob);
 
       final result = await repository.getJobById('1');
 
       expect(result, testJob);
-      verify(() => mockDataSource.fetchJobById('1')).called(1);
+      verify(() => mockDataSource.getJobById('1')).called(1);
     });
 
     test('delegates updateJobInteraction to datasource', () async {
