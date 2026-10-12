@@ -38,6 +38,7 @@ class JobItem {
     final rawPublishedAt = json['published_at'];
     final rawIsArchived = json['is_archived'];
     final rawUserId = json['user_id'];
+    final rawStatus = json['status'];
 
     final createdAtParsed = rawCreatedAt != null
         ? DateTime.tryParse(rawCreatedAt.toString())?.toLocal()
@@ -53,7 +54,8 @@ class JobItem {
 
     final isArchivedParsed = rawIsArchived == true ||
         rawIsArchived == 1 ||
-        rawIsArchived.toString().toLowerCase() == 'true';
+        rawIsArchived.toString().toLowerCase() == 'true' ||
+        rawStatus?.toString().toLowerCase() == 'archived';
 
     return JobItem(
       jobId: rawJobId?.toString() ?? '',

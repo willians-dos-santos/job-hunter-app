@@ -13,6 +13,9 @@ class JobsCubit extends Cubit<JobsState> {
 
   final JobsRepository _repository;
 
+  /// Exposes the underlying repository.
+  JobsRepository get repository => _repository;
+
   /// Loads jobs from repository, filtering out archived entries for the Kanban board.
   Future<void> loadJobs() async {
     emit(const JobsLoading());

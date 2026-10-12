@@ -443,7 +443,7 @@ void main() {
   });
 
   group('JobRemoteDataSource - toggleJobArchived', () {
-    test('upserts is_archived: true payload with onConflict user_id,job_id', () async {
+    test('upserts status: archived payload with onConflict user_id,job_id', () async {
       dynamic capturedPayload;
       String? capturedConflict;
 
@@ -466,13 +466,13 @@ void main() {
       expect(capturedPayload, {
         'job_id': 'job-123',
         'user_id': 'usr-test-123',
-        'is_archived': true,
+        'status': 'archived',
       });
       expect(capturedConflict, 'user_id,job_id');
       verify(() => mockClient.from(AppConstants.userJobInteractionsTable)).called(1);
     });
 
-    test('upserts is_archived: false payload with onConflict user_id,job_id', () async {
+    test('upserts status: new payload when isArchived is false with onConflict user_id,job_id', () async {
       dynamic capturedPayload;
       String? capturedConflict;
 
@@ -495,7 +495,7 @@ void main() {
       expect(capturedPayload, {
         'job_id': 'job-123',
         'user_id': 'usr-test-123',
-        'is_archived': false,
+        'status': 'new',
       });
       expect(capturedConflict, 'user_id,job_id');
     });
@@ -516,6 +516,43 @@ void main() {
           isArchived: true,
         ),
         throwsA(isA<JobMutationFailure>()),
+      );
+    });
+  });
+
+  group('JobRemoteDataSource - getArchivedJobs', () {
+    test('queries v_user_jobs with status: archived successfully', () async {
+      String? capturedEqualCol;
+      dynamic capturedEqualVal;
+
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [sampleJobJson],
+        onEq: (col, val) {
+          capturedEqualCol = col;
+          capturedEqualVal = val;
+        },
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      final result = await dataSource.getArchivedJobs();
+
+      expect(result.length, 1);
+      expect(capturedEqualCol, 'status');
+      expect(capturedEqualVal, 'archived');
+      verify(() => mockClient.from(AppConstants.userJobsView)).called(1);
+    });
+
+    test('propagates PostgrestException as JobFetchFailure', () async {
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        error: const PostgrestException(message: 'Query error', code: '400'),
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      expect(
+        () => dataSource.getArchivedJobs(),
+        throwsA(isA<JobFetchFailure>()),
       );
     });
   });

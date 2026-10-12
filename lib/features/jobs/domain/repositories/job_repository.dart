@@ -15,6 +15,14 @@ abstract class IJobRepository {
     String? userId,
   });
 
+  /// Fetches archived job items from `v_user_jobs` where `is_archived = true`
+  /// associated with the authenticated user.
+  Future<List<JobItem>> getArchivedJobs({
+    int limit = 50,
+    int offset = 0,
+    String? userId,
+  });
+
   /// Fetches a detailed job item by its [id].
   ///
   /// Throws [JobNotFoundFailure] if not found, or [JobFetchFailure] on query error.

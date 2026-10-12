@@ -9,6 +9,7 @@ import 'package:job_hunter_app/features/jobs/domain/models/job_item.dart';
 import 'package:job_hunter_app/features/jobs/domain/models/job_status.dart';
 import 'package:job_hunter_app/features/jobs/domain/repositories/jobs_repository.dart';
 import 'package:job_hunter_app/features/jobs/presentation/cubit/jobs_cubit.dart';
+import 'package:job_hunter_app/features/jobs/presentation/pages/archived_jobs_screen.dart';
 import 'package:job_hunter_app/features/jobs/presentation/pages/jobs_kanban_page.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/job_details_modal.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/kanban_column.dart';
@@ -599,6 +600,36 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(firstFocus.hasFocus, isFalse);
+    });
+
+    testWidgets(
+        'navigates to ArchivedJobsScreen and re-synchronizes jobs on return',
+        (tester) async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.getArchivedJobs())
+          .thenAnswer((_) async => []);
+
+      await cubit.loadJobs();
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final archiveButton = find.byTooltip('Vagas arquivadas');
+      expect(archiveButton, findsOneWidget);
+
+      await tester.tap(archiveButton);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ArchivedJobsScreen), findsOneWidget);
+
+      // Volta para a tela principal
+      await tester.tap(find.byTooltip('Voltar'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ArchivedJobsScreen), findsNothing);
+      expect(find.byType(JobsKanbanPage), findsOneWidget);
+      // Sincronizou chamando getJobs novamente
+      verify(() => mockRepository.getJobs()).called(2);
     });
   });
 }

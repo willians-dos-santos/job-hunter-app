@@ -98,6 +98,57 @@ void main() {
       );
     });
 
+    test('delegates getArchivedJobs with default parameters and configured userId', () async {
+      when(() => mockDataSource.getArchivedJobs(
+            limit: 50,
+            offset: 0,
+            userId: 'usr-test-123',
+          )).thenAnswer((_) async => [testJob]);
+
+      final result = await repository.getArchivedJobs();
+
+      expect(result, [testJob]);
+      verify(() => mockDataSource.getArchivedJobs(
+            limit: 50,
+            offset: 0,
+            userId: 'usr-test-123',
+          )).called(1);
+    });
+
+    test('delegates getArchivedJobs with custom pagination and overridden userId', () async {
+      when(() => mockDataSource.getArchivedJobs(
+            limit: 10,
+            offset: 20,
+            userId: 'custom-user',
+          )).thenAnswer((_) async => [testJob]);
+
+      final result = await repository.getArchivedJobs(
+        limit: 10,
+        offset: 20,
+        userId: 'custom-user',
+      );
+
+      expect(result, [testJob]);
+      verify(() => mockDataSource.getArchivedJobs(
+            limit: 10,
+            offset: 20,
+            userId: 'custom-user',
+          )).called(1);
+    });
+
+    test('propagates JobFetchFailure from getArchivedJobs', () async {
+      when(() => mockDataSource.getArchivedJobs(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+            userId: any(named: 'userId'),
+          )).thenThrow(const JobFetchFailure('Erro de conexão'));
+
+      expect(
+        () => repository.getArchivedJobs(),
+        throwsA(isA<JobFetchFailure>()),
+      );
+    });
+
     test('delegates getJobById and returns JobItem', () async {
       when(() => mockDataSource.getJobById('job-1', userId: 'usr-test-123'))
           .thenAnswer((_) async => testJob);

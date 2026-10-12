@@ -23,6 +23,14 @@ abstract class IJobRemoteDataSource {
     String? userId,
   });
 
+  /// Queries archived vacancies from `v_user_jobs` where `is_archived = true`
+  /// associated with the authenticated user.
+  Future<List<JobItem>> getArchivedJobs({
+    int limit = 50,
+    int offset = 0,
+    String? userId,
+  });
+
   /// Queries a single job from `v_user_jobs` by its [id].
   ///
   /// Throws [JobNotFoundFailure] if not found, or [JobFetchFailure] on query error.
@@ -164,6 +172,55 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
   }
 
   @override
+  Future<List<JobItem>> getArchivedJobs({
+    int limit = 50,
+    int offset = 0,
+    String? userId,
+  }) async {
+    try {
+      final effectiveUserId = _resolveUserId(userId);
+      debugPrint(
+        '[JobRemoteDataSource.getArchivedJobs] Querying ${AppConstants.userJobsView} for archived jobs: '
+        'limit=$limit, offset=$offset, userId=$effectiveUserId',
+      );
+
+      dynamic builder = _client
+          .from(AppConstants.userJobsView)
+          .select()
+          .eq('status', 'archived');
+
+      if (effectiveUserId != null) {
+        builder = builder.or('user_id.is.null,user_id.eq.$effectiveUserId');
+      }
+
+      builder = builder.order('published_at', ascending: false);
+
+      final start = offset < 0 ? 0 : offset;
+      if (limit > 0) {
+        builder = builder.range(start, start + limit - 1);
+      }
+
+      final response = await builder;
+      final rawList = response is List ? response : <dynamic>[];
+      debugPrint(
+        '[JobRemoteDataSource.getArchivedJobs] Response raw received (${rawList.length} items): $response',
+      );
+
+      final list = rawList.cast<Map<String, dynamic>>();
+      return list.map(JobItem.fromJson).toList();
+    } on PostgrestException catch (e) {
+      debugPrint(
+        '[JobRemoteDataSource.getArchivedJobs] PostgrestException: ${e.message} (code: ${e.code}, details: ${e.details})',
+      );
+      throw JobFetchFailure(e.message, code: e.code, details: e.details);
+    } catch (e) {
+      debugPrint('[JobRemoteDataSource.getArchivedJobs] Error: $e');
+      if (e is AppException) rethrow;
+      throw JobFetchFailure('Erro ao buscar vagas arquivadas: $e', details: e);
+    }
+  }
+
+  @override
   Future<JobItem> getJobById(String id, {String? userId}) async {
     try {
       final effectiveUserId = _resolveUserId(userId);
@@ -293,7 +350,7 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       final payload = <String, dynamic>{
         'job_id': jobId,
         'user_id': ?effectiveUserId,
-        'is_archived': isArchived,
+        'status': isArchived ? 'archived' : 'new',
       };
 
       debugPrint(

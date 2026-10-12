@@ -116,6 +116,17 @@ void main() {
       expect(item.effectiveDate, item.publishedAt);
     });
 
+    test('correctly parses status: archived as isArchived = true', () {
+      final json = <String, dynamic>{
+        ...fullJson,
+        'status': 'archived',
+      };
+
+      final item = JobItem.fromJson(json);
+
+      expect(item.isArchived, isTrue);
+    });
+
     test('falls back to published_at when created_at is absent from view payload', () {
       final payloadWithoutCreatedAt = <String, dynamic>{
         'job_id': 'job-200',
