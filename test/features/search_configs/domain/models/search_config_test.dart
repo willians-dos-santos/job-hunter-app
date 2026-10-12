@@ -7,6 +7,8 @@ void main() {
     test('correctly parses valid categories', () {
       expect(SearchConfigCategory.fromString('keyword'), SearchConfigCategory.keyword);
       expect(SearchConfigCategory.fromString('excluded'), SearchConfigCategory.excluded);
+      expect(SearchConfigCategory.fromString('excluded_keyword'), SearchConfigCategory.excludedKeyword);
+      expect(SearchConfigCategory.fromString('ats_filter'), SearchConfigCategory.atsFilter);
       expect(SearchConfigCategory.fromString('location'), SearchConfigCategory.location);
       expect(SearchConfigCategory.fromString('company'), SearchConfigCategory.company);
     });
@@ -64,7 +66,7 @@ void main() {
 
       expect(json, {
         'id': 'cfg-2',
-        'category': 'excluded',
+        'category': 'excluded_keyword',
         'value': 'Presencial',
         'is_active': false,
       });

@@ -15,6 +15,8 @@ import '../widgets/kanban_error_view.dart';
 import '../widgets/kanban_loading_skeleton.dart';
 import 'archived_jobs_screen.dart';
 import '../../../dashboard/presentation/pages/analytics_dashboard_screen.dart';
+import '../../../search_configs/domain/repositories/search_configs_repository.dart';
+import '../../../search_configs/presentation/pages/search_configs_screen.dart';
 
 /// Full Kanban board screen displaying the application funnel across 5 stages,
 /// with real-time debounced search and quick modality filter chips.
@@ -22,10 +24,12 @@ class JobsKanbanPage extends StatefulWidget {
   const JobsKanbanPage({
     super.key,
     this.cubit,
+    this.searchConfigsRepository,
     this.debounceDuration = const Duration(milliseconds: 400),
   });
 
   final JobsCubit? cubit;
+  final SearchConfigsRepository? searchConfigsRepository;
   final Duration debounceDuration;
 
   @override
@@ -134,6 +138,19 @@ class _JobsKanbanPageState extends State<JobsKanbanPage> {
                 ),
               );
               cubit.loadJobs();
+            },
+          ),
+          IconButton(
+            tooltip: 'Critérios de busca',
+            icon: const Icon(Icons.tune_rounded),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SearchConfigsScreen(
+                    repository: widget.searchConfigsRepository,
+                  ),
+                ),
+              );
             },
           ),
           IconButton(

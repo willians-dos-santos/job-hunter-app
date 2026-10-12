@@ -14,6 +14,7 @@ import 'features/jobs/domain/models/job_status.dart';
 import 'features/jobs/presentation/cubit/jobs_cubit.dart';
 import 'features/jobs/presentation/pages/jobs_kanban_page.dart';
 import 'features/dashboard/presentation/pages/analytics_dashboard_screen.dart';
+import 'features/search_configs/presentation/pages/search_configs_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -102,6 +103,20 @@ class BootstrapHomeScreen extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const AnalyticsDashboardScreen(),
+                ),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Critérios de Busca',
+            icon: const Icon(
+              Icons.tune_rounded,
+              color: AppColors.terminalCyan,
+            ),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SearchConfigsScreen(),
                 ),
               );
             },

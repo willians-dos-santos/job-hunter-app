@@ -12,13 +12,18 @@ import 'package:job_hunter_app/features/jobs/presentation/cubit/jobs_cubit.dart'
 import 'package:job_hunter_app/features/jobs/presentation/pages/archived_jobs_screen.dart';
 import 'package:job_hunter_app/features/jobs/presentation/pages/jobs_kanban_page.dart';
 import 'package:job_hunter_app/features/dashboard/presentation/pages/analytics_dashboard_screen.dart';
+import 'package:job_hunter_app/features/search_configs/presentation/pages/search_configs_screen.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/job_details_modal.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/kanban_column.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/kanban_error_view.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/kanban_loading_skeleton.dart';
+import 'package:job_hunter_app/features/search_configs/domain/repositories/search_configs_repository.dart';
 import 'package:mocktail/mocktail.dart';
 
 class MockJobsRepository extends Mock implements JobsRepository {}
+
+class MockSearchConfigsRepository extends Mock
+    implements SearchConfigsRepository {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -107,10 +112,16 @@ void main() {
     cubit.close();
   });
 
-  Widget buildSubject({JobsCubit? customCubit}) {
+  Widget buildSubject({
+    JobsCubit? customCubit,
+    SearchConfigsRepository? searchConfigsRepository,
+  }) {
     return MaterialApp(
       theme: AppTheme.darkTheme,
-      home: JobsKanbanPage(cubit: customCubit ?? cubit),
+      home: JobsKanbanPage(
+        cubit: customCubit ?? cubit,
+        searchConfigsRepository: searchConfigsRepository,
+      ),
     );
   }
 
@@ -661,6 +672,38 @@ void main() {
       expect(find.byType(JobsKanbanPage), findsOneWidget);
       // Sincronizou chamando getJobs novamente
       verify(() => mockRepository.getJobs()).called(2);
+    });
+
+    testWidgets('navigates to SearchConfigsScreen from AppBar', (tester) async {
+      final mockSearchConfigsRepository = MockSearchConfigsRepository();
+      when(() => mockSearchConfigsRepository.getConfigs())
+          .thenAnswer((_) async => []);
+
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.getJobs(limit: any(named: 'limit')))
+          .thenAnswer((_) async => [testJob1]);
+
+      await cubit.loadJobs();
+      await tester.pumpWidget(buildSubject(
+        searchConfigsRepository: mockSearchConfigsRepository,
+      ));
+      await tester.pumpAndSettle();
+
+      final searchConfigsButton = find.byTooltip('Critérios de busca');
+      expect(searchConfigsButton, findsOneWidget);
+
+      await tester.tap(searchConfigsButton);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SearchConfigsScreen), findsOneWidget);
+
+      // Volta para a tela principal
+      await tester.tap(find.byTooltip('Voltar'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SearchConfigsScreen), findsNothing);
+      expect(find.byType(JobsKanbanPage), findsOneWidget);
     });
   });
 }
