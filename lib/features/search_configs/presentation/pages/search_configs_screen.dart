@@ -184,8 +184,10 @@ class _SearchConfigsScreenState extends State<SearchConfigsScreen> {
             const SizedBox(width: 8),
           ],
         ),
-        body: BlocConsumer<SearchConfigsCubit, SearchConfigsState>(
-          bloc: _cubit,
+        body: SafeArea(
+          top: false,
+          child: BlocConsumer<SearchConfigsCubit, SearchConfigsState>(
+            bloc: _cubit,
           listener: (context, state) {
             if (state is SearchConfigsError) {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -300,8 +302,9 @@ class _SearchConfigsScreenState extends State<SearchConfigsScreen> {
           },
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSummaryCard(SearchConfigsLoaded loaded) {
     return Container(

@@ -690,7 +690,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      final searchConfigsButton = find.byTooltip('Critérios de busca');
+      final searchConfigsButton = find.byTooltip('Configurações de busca');
       expect(searchConfigsButton, findsOneWidget);
 
       await tester.tap(searchConfigsButton);

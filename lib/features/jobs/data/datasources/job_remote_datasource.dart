@@ -84,11 +84,13 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
   JobRemoteDataSource([
     SupabaseClient? client,
     String? userId,
-  ])  : _client = client ?? SupabaseService.client,
+  ])  : _providedClient = client,
         _configuredUserId = userId;
 
-  final SupabaseClient _client;
+  final SupabaseClient? _providedClient;
   final String? _configuredUserId;
+
+  SupabaseClient get _client => _providedClient ?? SupabaseService.client;
 
   String? _tryGetAuthUserId() {
     try {

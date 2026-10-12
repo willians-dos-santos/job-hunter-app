@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="job_hunter_app"
+        android:label="Job Hunter"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

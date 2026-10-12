@@ -11,6 +11,7 @@ import 'core/theme/app_typography.dart';
 import 'core/theme/kanban_status_colors.dart';
 import 'features/jobs/data/repositories/job_repository_impl.dart';
 import 'features/jobs/domain/models/job_status.dart';
+import 'features/jobs/domain/repositories/job_repository.dart';
 import 'features/jobs/presentation/cubit/jobs_cubit.dart';
 import 'features/jobs/presentation/pages/jobs_kanban_page.dart';
 import 'features/dashboard/presentation/pages/analytics_dashboard_screen.dart';
@@ -38,9 +39,18 @@ Future<void> main() async {
 
 /// Root widget of the Job Hunter application.
 class JobHunterApp extends StatelessWidget {
-  const JobHunterApp({super.key, this.bootstrapError});
+  const JobHunterApp({
+    super.key,
+    this.bootstrapError,
+    this.jobsRepository,
+    this.jobsCubit,
+    this.home,
+  });
 
   final String? bootstrapError;
+  final IJobRepository? jobsRepository;
+  final JobsCubit? jobsCubit;
+  final Widget? home;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +58,15 @@ class JobHunterApp extends StatelessWidget {
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      home: BootstrapHomeScreen(bootstrapError: bootstrapError),
+      home: home ??
+          (bootstrapError != null
+              ? BootstrapHomeScreen(bootstrapError: bootstrapError)
+              : BlocProvider(
+                  create: (_) =>
+                      jobsCubit ??
+                      (JobsCubit(jobsRepository ?? JobRepository())..loadJobs()),
+                  child: const JobsKanbanScreen(),
+                )),
     );
   }
 }

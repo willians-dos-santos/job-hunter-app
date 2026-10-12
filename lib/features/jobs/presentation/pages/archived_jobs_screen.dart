@@ -98,8 +98,10 @@ class _ArchivedJobsScreenState extends State<ArchivedJobsScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: BlocConsumer<ArchivedJobsCubit, ArchivedJobsState>(
-        bloc: _cubit,
+      body: SafeArea(
+        top: false,
+        child: BlocConsumer<ArchivedJobsCubit, ArchivedJobsState>(
+          bloc: _cubit,
         listener: (context, state) {
           if (state is ArchivedJobsLoaded) {
             if (state.errorMessage != null) {
@@ -232,7 +234,8 @@ class _ArchivedJobsScreenState extends State<ArchivedJobsScreen> {
           return const SizedBox.shrink();
         },
       ),
-    );
+    ),
+  );
   }
 }
 

@@ -141,8 +141,8 @@ class _JobsKanbanPageState extends State<JobsKanbanPage> {
             },
           ),
           IconButton(
-            tooltip: 'Critérios de busca',
-            icon: const Icon(Icons.tune_rounded),
+            tooltip: 'Configurações de busca',
+            icon: const Icon(Icons.tune_outlined),
             onPressed: () async {
               await Navigator.of(context).push(
                 MaterialPageRoute(
@@ -177,8 +177,10 @@ class _JobsKanbanPageState extends State<JobsKanbanPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: BlocConsumer<JobsCubit, JobsState>(
-        bloc: cubit,
+      body: SafeArea(
+        top: false,
+        child: BlocConsumer<JobsCubit, JobsState>(
+          bloc: cubit,
         listener: (context, state) {
           if (state is JobsLoaded) {
             if (state.errorMessage != null) {
@@ -337,8 +339,9 @@ class _JobsKanbanPageState extends State<JobsKanbanPage> {
           },
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSearchBar(
       BuildContext context, JobsCubit cubit, JobsLoaded state) {
@@ -620,3 +623,6 @@ class _ModalityFilterChip extends StatelessWidget {
     );
   }
 }
+
+/// Backwards-compatible and semantic alias for [JobsKanbanPage].
+typedef JobsKanbanScreen = JobsKanbanPage;

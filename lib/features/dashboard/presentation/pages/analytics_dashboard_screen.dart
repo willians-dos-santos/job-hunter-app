@@ -101,8 +101,10 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: BlocBuilder<AnalyticsDashboardCubit, AnalyticsDashboardState>(
-        bloc: _cubit,
+      body: SafeArea(
+        top: false,
+        child: BlocBuilder<AnalyticsDashboardCubit, AnalyticsDashboardState>(
+          bloc: _cubit,
         builder: (context, state) {
           if (state is AnalyticsDashboardLoading ||
               state is AnalyticsDashboardInitial) {
@@ -166,8 +168,9 @@ class _AnalyticsDashboardScreenState extends State<AnalyticsDashboardScreen> {
           return const SizedBox.shrink();
         },
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildKpiSection(AnalyticsDashboardLoaded state, bool isTablet) {
     final kpiCards = [
