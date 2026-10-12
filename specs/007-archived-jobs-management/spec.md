@@ -115,3 +115,11 @@ Reutiliza a experiência consistente de detalhes e anotações sem duplicar comp
 - **SC-003**: Testes unitários no `ArchivedJobsCubit` cobrindo carregamento, lista vazia, falha, restauração otimista e rollback em caso de erro.
 - **SC-004**: Testes de widgets na tela `ArchivedJobsScreen` cobrindo loading, listagem, estado vazio, acionamento de restauração e abertura do modal de detalhes.
 - **SC-005**: Testes de widgets na `JobsKanbanPage` validando presença do botão de arquivadas e navegação.
+
+---
+
+## 8. Database Schema & Data Contracts Reference
+- **Contrato Canônico de Dados**: [specs/database-schema.md](file:///home/willians/workspace/flutter/job_hunter_app/specs/database-schema.md)
+  - Todas as consultas, mapeamentos da view `public.v_user_jobs` e mutações na tabela `public.user_job_interactions` seguem estritamente as definições estabelecidas no documento de esquema canônico do projeto.
+  - Mutações de interação (status, notas, arquivamento) gravam na tabela `user_job_interactions` utilizando a chave composta `(user_id, job_id)` com `onConflict: 'user_id,job_id'`.
+

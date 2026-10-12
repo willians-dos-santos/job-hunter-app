@@ -157,3 +157,10 @@ Pode ser testado simulando o lançamento de `PostgrestException` e `SocketExcept
 - A view `v_user_jobs` e a tabela `user_job_interactions` existem no schema público do Supabase configurado via `.env`.
 - As credenciais de acesso anon possuem permissões adequadas de leitura em `v_user_jobs` e de upsert em `user_job_interactions` (com RLS configurado no backend).
 - O cliente Supabase é acessado via `SupabaseService.client` ou injetado via construtor nos data sources para viabilizar injeção de dependência em testes.
+
+---
+
+## Database Schema & Data Contracts Reference
+- **Contrato Canônico de Dados**: [specs/database-schema.md](file:///home/willians/workspace/flutter/job_hunter_app/specs/database-schema.md)
+  - Consultas em `JobRemoteDataSource` e mutações na tabela `user_job_interactions` devem seguir estritamente o contrato canônico estabelecido em [database-schema.md](file:///home/willians/workspace/flutter/job_hunter_app/specs/database-schema.md).
+

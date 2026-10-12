@@ -56,4 +56,6 @@ linux/flutter/ephemeral/
 
 # --- FERRAMENTAS / AGENTES ---
 .specify/
+!.specify/memory/
+!.specify/memory/constitution.md
 .agents/

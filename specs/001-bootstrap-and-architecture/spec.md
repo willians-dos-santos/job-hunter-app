@@ -211,3 +211,10 @@ Pode ser testado via execução do comando `flutter analyze` e verificação da 
 - O banco de dados Supabase já possui ou receberá a view `v_user_jobs`, a tabela `search_configs` e a tabela `user_job_interactions` compatíveis com os campos mapeados nesta spec.
 - O arquivo `.env` conterá as chaves `SUPABASE_URL` e `SUPABASE_ANON_KEY`, enquanto um `.env.example` conterá instruções de preenchimento.
 - A tela inicial nesta etapa inicial de bootstrap será um esqueleto funcional limpo exibindo o tema dark aplicado e o status de conexão/carregamento, preparando o terreno para a implementação das telas completas nas especificações subsequentes.
+
+---
+
+## Database Schema & Data Contracts Reference
+- **Contrato Canônico de Dados**: [specs/database-schema.md](file:///home/willians/workspace/flutter/job_hunter_app/specs/database-schema.md)
+  - A modelagem das entidades de dados (`JobItem`, `SearchConfig`, `UserJobInteraction`) e views do Supabase segue rigorosamente o contrato canônico estabelecido em [database-schema.md](file:///home/willians/workspace/flutter/job_hunter_app/specs/database-schema.md).
+
