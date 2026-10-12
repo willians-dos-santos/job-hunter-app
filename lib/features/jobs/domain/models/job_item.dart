@@ -301,3 +301,6 @@ class JobItem {
     return 'JobItem(jobId: $jobId, userId: $userId, title: $title, company: $companyName, status: ${status.value}, isArchived: $isArchived)';
   }
 }
+
+/// Domain entity alias for [JobItem] mapping directly to canonical `v_user_jobs`.
+typedef JobEntity = JobItem;

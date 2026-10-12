@@ -14,6 +14,7 @@ import '../widgets/kanban_column.dart';
 import '../widgets/kanban_error_view.dart';
 import '../widgets/kanban_loading_skeleton.dart';
 import 'archived_jobs_screen.dart';
+import '../../../dashboard/presentation/pages/analytics_dashboard_screen.dart';
 
 /// Full Kanban board screen displaying the application funnel across 5 stages,
 /// with real-time debounced search and quick modality filter chips.
@@ -121,6 +122,20 @@ class _JobsKanbanPageState extends State<JobsKanbanPage> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Dashboard e Métricas',
+            icon: const Icon(Icons.insights_outlined),
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AnalyticsDashboardScreen(
+                    repository: cubit.repository,
+                  ),
+                ),
+              );
+              cubit.loadJobs();
+            },
+          ),
           IconButton(
             tooltip: 'Vagas arquivadas',
             icon: const Icon(Icons.archive_outlined),

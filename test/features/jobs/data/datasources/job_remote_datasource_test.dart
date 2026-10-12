@@ -327,6 +327,37 @@ void main() {
       verify(() => mockClient.from(AppConstants.userJobInteractionsTable)).called(1);
     });
 
+    test('resolves user_id from auth.currentUser?.id when configuredUserId is null', () async {
+      final mockAuth = MockGoTrueClient();
+      final mockUser = MockUser();
+      when(() => mockUser.id).thenReturn('auth-user-999');
+      when(() => mockAuth.currentUser).thenReturn(mockUser);
+      when(() => mockClient.auth).thenReturn(mockAuth);
+
+      final ds = JobRemoteDataSource(mockClient, null);
+
+      dynamic capturedPayload;
+      String? capturedConflict;
+      final fakeUpsert = FakePostgrestFilterBuilder<void>(data: null);
+      when(() => mockQueryBuilder.upsert(
+            any(),
+            onConflict: any(named: 'onConflict'),
+          )).thenAnswer((invocation) {
+        capturedPayload = invocation.positionalArguments[0];
+        capturedConflict = invocation.namedArguments[#onConflict] as String?;
+        return fakeUpsert;
+      });
+
+      await ds.updateJobStatus(
+        jobId: 'job-123',
+        newStatus: 'offer',
+      );
+
+      expect(capturedPayload['user_id'], 'auth-user-999');
+      expect(capturedPayload['status'], 'offer');
+      expect(capturedConflict, 'user_id,job_id');
+    });
+
     test('includes applied_at timestamp when status transitions to applied', () async {
       dynamic capturedPayload;
 

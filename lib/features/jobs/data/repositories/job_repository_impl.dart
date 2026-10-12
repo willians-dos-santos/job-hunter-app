@@ -1,4 +1,5 @@
 import '../../../../core/services/env_config.dart';
+import '../../../../core/services/supabase_service.dart';
 import '../../domain/models/job_item.dart';
 import '../../domain/models/user_job_interaction.dart';
 import '../../domain/repositories/job_repository.dart';
@@ -16,14 +17,25 @@ class JobRepository implements IJobRepository {
   final IJobRemoteDataSource _remoteDataSource;
   final String? _configuredUserId;
 
-  /// Effective user ID resolved from explicit injection or [EnvConfig.supabaseUserId].
+  /// Effective user ID resolved from explicit injection, Supabase Auth session, or [EnvConfig.supabaseUserId].
   String? get currentUserId {
     final configured = _configuredUserId?.trim();
     if (configured != null && configured.isNotEmpty) {
       return configured;
     }
+    try {
+      final authId = SupabaseService.client.auth.currentUser?.id.trim();
+      if (authId != null && authId.isNotEmpty) {
+        return authId;
+      }
+    } catch (_) {
+      // Ignora erro se cliente não estiver inicializado ou em testes
+    }
     if (EnvConfig.isInitialized) {
-      return EnvConfig.supabaseUserId;
+      final envId = EnvConfig.supabaseUserId?.trim();
+      if (envId != null && envId.isNotEmpty) {
+        return envId;
+      }
     }
     return null;
   }

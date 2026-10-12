@@ -11,6 +11,7 @@ import 'package:job_hunter_app/features/jobs/domain/repositories/jobs_repository
 import 'package:job_hunter_app/features/jobs/presentation/cubit/jobs_cubit.dart';
 import 'package:job_hunter_app/features/jobs/presentation/pages/archived_jobs_screen.dart';
 import 'package:job_hunter_app/features/jobs/presentation/pages/jobs_kanban_page.dart';
+import 'package:job_hunter_app/features/dashboard/presentation/pages/analytics_dashboard_screen.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/job_details_modal.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/kanban_column.dart';
 import 'package:job_hunter_app/features/jobs/presentation/widgets/kanban_error_view.dart';
@@ -627,6 +628,36 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(ArchivedJobsScreen), findsNothing);
+      expect(find.byType(JobsKanbanPage), findsOneWidget);
+      // Sincronizou chamando getJobs novamente
+      verify(() => mockRepository.getJobs()).called(2);
+    });
+
+    testWidgets(
+        'navigates to AnalyticsDashboardScreen and re-synchronizes jobs on return',
+        (tester) async {
+      when(() => mockRepository.getJobs())
+          .thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.getJobs(limit: any(named: 'limit')))
+          .thenAnswer((_) async => [testJob1]);
+
+      await cubit.loadJobs();
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      final dashboardButton = find.byTooltip('Dashboard e Métricas');
+      expect(dashboardButton, findsOneWidget);
+
+      await tester.tap(dashboardButton);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AnalyticsDashboardScreen), findsOneWidget);
+
+      // Volta para a tela principal
+      await tester.tap(find.byTooltip('Voltar'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AnalyticsDashboardScreen), findsNothing);
       expect(find.byType(JobsKanbanPage), findsOneWidget);
       // Sincronizou chamando getJobs novamente
       verify(() => mockRepository.getJobs()).called(2);

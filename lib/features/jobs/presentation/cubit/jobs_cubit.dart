@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/models/job_item.dart';
@@ -64,11 +65,21 @@ class JobsCubit extends Cubit<JobsState> {
 
     // 2. Persistência com Rollback em caso de erro
     try {
+      debugPrint(
+        '[JobsCubit.moveJobStatus] Persistindo no Supabase: jobId=$jobId, '
+        'status=${targetStatus.value} (input: $newStatus)',
+      );
       await _repository.updateJobStatus(
         jobId: jobId,
         newStatus: newStatus,
       );
-    } catch (e) {
+      debugPrint(
+        '[JobsCubit.moveJobStatus] Persistência realizada com sucesso para jobId=$jobId',
+      );
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[JobsCubit.moveJobStatus] ERRO ao persistir status da vaga jobId=$jobId: $e\n$stackTrace',
+      );
       emit(JobsLoaded(
         previousJobs,
         allJobs: previousAllJobs,
@@ -107,10 +118,12 @@ class JobsCubit extends Cubit<JobsState> {
 
     // 2. Persistência
     try {
+      debugPrint('[JobsCubit.archiveJob] Arquivando vaga jobId=$jobId');
       await _repository.toggleJobArchived(
         jobId: jobId,
         isArchived: true,
       );
+      debugPrint('[JobsCubit.archiveJob] Vaga arquivada com sucesso jobId=$jobId');
       emit(JobsLoaded(
         updatedJobs,
         allJobs: updatedAllJobs,
@@ -118,7 +131,10 @@ class JobsCubit extends Cubit<JobsState> {
         selectedModality: currentState.selectedModality,
         successMessage: 'Vaga arquivada com sucesso.',
       ));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[JobsCubit.archiveJob] ERRO ao arquivar vaga jobId=$jobId: $e\n$stackTrace',
+      );
       emit(JobsLoaded(
         previousJobs,
         allJobs: previousAllJobs,
@@ -164,10 +180,12 @@ class JobsCubit extends Cubit<JobsState> {
 
     // 2. Persistência com Rollback em caso de erro
     try {
+      debugPrint('[JobsCubit.updateJobNotes] Salvando anotações para jobId=$jobId');
       await _repository.updateJobNotes(
         jobId: jobId,
         notes: notes,
       );
+      debugPrint('[JobsCubit.updateJobNotes] Anotações salvas com sucesso para jobId=$jobId');
       emit(JobsLoaded(
         updatedJobs,
         allJobs: updatedAllJobs,
@@ -175,7 +193,10 @@ class JobsCubit extends Cubit<JobsState> {
         selectedModality: currentState.selectedModality,
         successMessage: 'Anotações salvas com sucesso.',
       ));
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[JobsCubit.updateJobNotes] ERRO ao salvar anotações para jobId=$jobId: $e\n$stackTrace',
+      );
       emit(JobsLoaded(
         previousJobs,
         allJobs: previousAllJobs,

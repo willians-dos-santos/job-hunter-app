@@ -13,6 +13,7 @@ import 'features/jobs/data/repositories/job_repository_impl.dart';
 import 'features/jobs/domain/models/job_status.dart';
 import 'features/jobs/presentation/cubit/jobs_cubit.dart';
 import 'features/jobs/presentation/pages/jobs_kanban_page.dart';
+import 'features/dashboard/presentation/pages/analytics_dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -91,6 +92,20 @@ class BootstrapHomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Dashboard e Métricas',
+            icon: const Icon(
+              Icons.insights_outlined,
+              color: AppColors.terminalCyan,
+            ),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AnalyticsDashboardScreen(),
+                ),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Abrir Quadro Kanban',
             icon: const Icon(

@@ -90,14 +90,36 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
   final SupabaseClient _client;
   final String? _configuredUserId;
 
-  /// Effective user ID resolved from explicit injection or [EnvConfig.supabaseUserId].
+  String? _tryGetAuthUserId() {
+    try {
+      final authId = _client.auth.currentUser?.id.trim();
+      if (authId != null && authId.isNotEmpty) {
+        return authId;
+      }
+    } catch (_) {
+      // Ignora erro em ambientes de teste sem stub de auth
+    }
+    return null;
+  }
+
+  /// Effective user ID resolved from explicit injection, Supabase Auth session, or [EnvConfig.supabaseUserId].
   String? get currentUserId {
+    // 1. Explicitamente injetado
     final configured = _configuredUserId?.trim();
     if (configured != null && configured.isNotEmpty) {
       return configured;
     }
+    // 2. Usuário autenticado na sessão do Supabase Auth
+    final authId = _tryGetAuthUserId();
+    if (authId != null && authId.isNotEmpty) {
+      return authId;
+    }
+    // 3. Fallback para EnvConfig (.env SUPABASE_USER_ID)
     if (EnvConfig.isInitialized) {
-      return EnvConfig.supabaseUserId;
+      final envId = EnvConfig.supabaseUserId?.trim();
+      if (envId != null && envId.isNotEmpty) {
+        return envId;
+      }
     }
     return null;
   }
@@ -268,9 +290,25 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
     try {
       final effectiveUserId = _resolveUserId(userId);
       final normalizedStatus = JobStatus.fromString(newStatus).value;
+
+      const allowedStatuses = {
+        'new',
+        'applied',
+        'interviewing',
+        'offer',
+        'rejected',
+      };
+      if (!allowedStatuses.contains(normalizedStatus)) {
+        debugPrint(
+          '[JobRemoteDataSource.updateJobStatus] AVISO: status "$normalizedStatus" '
+          'não é um dos valores permitidos pela constraint do banco: $allowedStatuses',
+        );
+      }
+
       final payload = <String, dynamic>{
         'job_id': jobId,
-        'user_id': ?effectiveUserId,
+        if (effectiveUserId != null && effectiveUserId.isNotEmpty)
+          'user_id': effectiveUserId,
         'status': normalizedStatus,
       };
 
@@ -278,23 +316,48 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
         payload['applied_at'] = DateTime.now().toUtc().toIso8601String();
       }
 
+      if (effectiveUserId == null || effectiveUserId.isEmpty) {
+        debugPrint(
+          '[JobRemoteDataSource.updateJobStatus] ALERTA CRÍTICO: user_id está nulo/vazio ao montar payload! '
+          'auth.currentUser?.id=${_tryGetAuthUserId()}, '
+          'configured=$_configuredUserId, '
+          'EnvConfig=${EnvConfig.isInitialized ? EnvConfig.supabaseUserId : "não inicializado"}. '
+          'O upsert em user_job_interactions exige user_id para satisfazer onConflict: "user_id,job_id".',
+        );
+      }
+
       debugPrint(
-        '[JobRemoteDataSource.updateJobStatus] status: "$normalizedStatus" (raw parameter: "$newStatus"), payload: $payload',
+        '[JobRemoteDataSource.updateJobStatus] status: "$normalizedStatus" (raw: "$newStatus"), payload: $payload',
       );
       debugPrint(
-        '[JobRemoteDataSource.updateJobStatus] Upserting to ${AppConstants.userJobInteractionsTable}: $payload',
+        '[JobRemoteDataSource.updateJobStatus] Upserting to ${AppConstants.userJobInteractionsTable} '
+        'com onConflict "user_id,job_id": $payload',
       );
+
       await _client
           .from(AppConstants.userJobInteractionsTable)
           .upsert(payload, onConflict: 'user_id,job_id');
-      debugPrint('[JobRemoteDataSource.updateJobStatus] Upsert successful');
+
+      debugPrint(
+        '[JobRemoteDataSource.updateJobStatus] Upsert concluído com sucesso para jobId=$jobId, status=$normalizedStatus',
+      );
     } on PostgrestException catch (e) {
       debugPrint(
-        '[JobRemoteDataSource.updateJobStatus] PostgrestException: ${e.message} (code: ${e.code})',
+        '[JobRemoteDataSource.updateJobStatus] PostgrestException ao atualizar status da vaga ($jobId):\n'
+        '  message: ${e.message}\n'
+        '  code: ${e.code}\n'
+        '  details: ${e.details}\n'
+        '  hint: ${e.hint}',
       );
-      throw JobMutationFailure(e.message, code: e.code, details: e.details);
-    } catch (e) {
-      debugPrint('[JobRemoteDataSource.updateJobStatus] Error: $e');
+      throw JobMutationFailure(
+        e.message,
+        code: e.code,
+        details: '${e.details ?? ''} ${e.hint ?? ''}'.trim(),
+      );
+    } catch (e, stackTrace) {
+      debugPrint(
+        '[JobRemoteDataSource.updateJobStatus] Erro inesperado ao atualizar status (jobId=$jobId): $e\n$stackTrace',
+      );
       if (e is AppException) rethrow;
       throw JobMutationFailure(
         'Erro ao atualizar status da vaga: $e',
@@ -313,12 +376,21 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       final effectiveUserId = _resolveUserId(userId);
       final payload = <String, dynamic>{
         'job_id': jobId,
-        'user_id': ?effectiveUserId,
+        if (effectiveUserId != null && effectiveUserId.isNotEmpty)
+          'user_id': effectiveUserId,
         'notes': notes,
       };
 
+      if (effectiveUserId == null || effectiveUserId.isEmpty) {
+        debugPrint(
+          '[JobRemoteDataSource.updateJobNotes] ALERTA CRÍTICO: user_id está nulo/vazio ao montar payload! '
+          'auth.currentUser?.id=${_tryGetAuthUserId()}, configured=$_configuredUserId',
+        );
+      }
+
       debugPrint(
-        '[JobRemoteDataSource.updateJobNotes] Upserting to ${AppConstants.userJobInteractionsTable}: $payload',
+        '[JobRemoteDataSource.updateJobNotes] Upserting to ${AppConstants.userJobInteractionsTable} '
+        'com onConflict "user_id,job_id": $payload',
       );
       await _client
           .from(AppConstants.userJobInteractionsTable)
@@ -326,11 +398,19 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       debugPrint('[JobRemoteDataSource.updateJobNotes] Upsert successful');
     } on PostgrestException catch (e) {
       debugPrint(
-        '[JobRemoteDataSource.updateJobNotes] PostgrestException: ${e.message} (code: ${e.code})',
+        '[JobRemoteDataSource.updateJobNotes] PostgrestException (jobId=$jobId):\n'
+        '  message: ${e.message}\n'
+        '  code: ${e.code}\n'
+        '  details: ${e.details}\n'
+        '  hint: ${e.hint}',
       );
-      throw JobMutationFailure(e.message, code: e.code, details: e.details);
-    } catch (e) {
-      debugPrint('[JobRemoteDataSource.updateJobNotes] Error: $e');
+      throw JobMutationFailure(
+        e.message,
+        code: e.code,
+        details: '${e.details ?? ''} ${e.hint ?? ''}'.trim(),
+      );
+    } catch (e, stackTrace) {
+      debugPrint('[JobRemoteDataSource.updateJobNotes] Error: $e\n$stackTrace');
       if (e is AppException) rethrow;
       throw JobMutationFailure(
         'Erro ao atualizar anotações da vaga: $e',
@@ -349,12 +429,21 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       final effectiveUserId = _resolveUserId(userId);
       final payload = <String, dynamic>{
         'job_id': jobId,
-        'user_id': ?effectiveUserId,
+        if (effectiveUserId != null && effectiveUserId.isNotEmpty)
+          'user_id': effectiveUserId,
         'status': isArchived ? 'archived' : 'new',
       };
 
+      if (effectiveUserId == null || effectiveUserId.isEmpty) {
+        debugPrint(
+          '[JobRemoteDataSource.toggleJobArchived] ALERTA CRÍTICO: user_id está nulo/vazio ao montar payload! '
+          'auth.currentUser?.id=${_tryGetAuthUserId()}, configured=$_configuredUserId',
+        );
+      }
+
       debugPrint(
-        '[JobRemoteDataSource.toggleJobArchived] Upserting to ${AppConstants.userJobInteractionsTable}: $payload',
+        '[JobRemoteDataSource.toggleJobArchived] Upserting to ${AppConstants.userJobInteractionsTable} '
+        'com onConflict "user_id,job_id": $payload',
       );
       await _client
           .from(AppConstants.userJobInteractionsTable)
@@ -362,11 +451,19 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       debugPrint('[JobRemoteDataSource.toggleJobArchived] Upsert successful');
     } on PostgrestException catch (e) {
       debugPrint(
-        '[JobRemoteDataSource.toggleJobArchived] PostgrestException: ${e.message} (code: ${e.code})',
+        '[JobRemoteDataSource.toggleJobArchived] PostgrestException (jobId=$jobId):\n'
+        '  message: ${e.message}\n'
+        '  code: ${e.code}\n'
+        '  details: ${e.details}\n'
+        '  hint: ${e.hint}',
       );
-      throw JobMutationFailure(e.message, code: e.code, details: e.details);
-    } catch (e) {
-      debugPrint('[JobRemoteDataSource.toggleJobArchived] Error: $e');
+      throw JobMutationFailure(
+        e.message,
+        code: e.code,
+        details: '${e.details ?? ''} ${e.hint ?? ''}'.trim(),
+      );
+    } catch (e, stackTrace) {
+      debugPrint('[JobRemoteDataSource.toggleJobArchived] Error: $e\n$stackTrace');
       if (e is AppException) rethrow;
       throw JobMutationFailure(
         'Erro ao atualizar arquivamento da vaga: $e',
@@ -383,7 +480,7 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
     try {
       final effectiveUserId = _resolveUserId(userId ?? interaction.userId);
       final payload = interaction.toJson();
-      if (effectiveUserId != null) {
+      if (effectiveUserId != null && effectiveUserId.isNotEmpty) {
         payload['user_id'] = effectiveUserId;
       }
       if (payload.containsKey('status') && payload['status'] != null) {
@@ -395,7 +492,8 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
         '[JobRemoteDataSource.upsertInteraction] status: "${payload['status']}", payload: $payload',
       );
       debugPrint(
-        '[JobRemoteDataSource.upsertInteraction] Upserting to ${AppConstants.userJobInteractionsTable}: $payload',
+        '[JobRemoteDataSource.upsertInteraction] Upserting to ${AppConstants.userJobInteractionsTable} '
+        'com onConflict "user_id,job_id": $payload',
       );
       await _client
           .from(AppConstants.userJobInteractionsTable)
@@ -403,11 +501,19 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       debugPrint('[JobRemoteDataSource.upsertInteraction] Upsert successful');
     } on PostgrestException catch (e) {
       debugPrint(
-        '[JobRemoteDataSource.upsertInteraction] PostgrestException: ${e.message} (code: ${e.code})',
+        '[JobRemoteDataSource.upsertInteraction] PostgrestException (jobId=${interaction.jobId}):\n'
+        '  message: ${e.message}\n'
+        '  code: ${e.code}\n'
+        '  details: ${e.details}\n'
+        '  hint: ${e.hint}',
       );
-      throw JobMutationFailure(e.message, code: e.code, details: e.details);
-    } catch (e) {
-      debugPrint('[JobRemoteDataSource.upsertInteraction] Error: $e');
+      throw JobMutationFailure(
+        e.message,
+        code: e.code,
+        details: '${e.details ?? ''} ${e.hint ?? ''}'.trim(),
+      );
+    } catch (e, stackTrace) {
+      debugPrint('[JobRemoteDataSource.upsertInteraction] Error: $e\n$stackTrace');
       if (e is AppException) rethrow;
       throw JobMutationFailure(
         'Erro ao registrar interação da vaga: $e',
