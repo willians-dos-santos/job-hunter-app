@@ -15,6 +15,24 @@ abstract class IJobRepository {
     String? userId,
   });
 
+  /// Fetches triage inbox vacancies from `v_new_jobs`.
+  ///
+  /// Ordered by `created_at desc` with dedicated offset pagination.
+  Future<List<JobItem>> getNewJobs({
+    int limit = 20,
+    int offset = 0,
+    String? userId,
+  });
+
+  /// Fetches active pipeline vacancies from `v_active_pipeline_jobs`.
+  ///
+  /// Ordered by `interaction_updated_at desc` without aggressive pagination limits.
+  Future<List<JobItem>> getActivePipelineJobs({
+    int? limit,
+    int? offset,
+    String? userId,
+  });
+
   /// Fetches archived job items from `v_user_jobs` where `is_archived = true`
   /// associated with the authenticated user.
   Future<List<JobItem>> getArchivedJobs({

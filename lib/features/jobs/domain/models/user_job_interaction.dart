@@ -19,7 +19,7 @@ class UserJobInteraction {
 
   /// Factory parser for interaction records.
   factory UserJobInteraction.fromJson(Map<String, dynamic> json) {
-    final rawJobId = json['job_id'];
+    final rawJobId = json['job_id'] ?? json['id'] ?? json['jobId'];
     final rawUserId = json['user_id'];
     final rawStatus = json['status'];
     final rawAppliedAt = json['applied_at'];
@@ -37,7 +37,7 @@ class UserJobInteraction {
         : null;
 
     return UserJobInteraction(
-      jobId: rawJobId?.toString() ?? '',
+      jobId: (rawJobId?.toString() ?? '').trim(),
       userId: rawUserId?.toString(),
       status: status,
       notes: json['notes']?.toString(),

@@ -29,6 +29,10 @@ final class JobsLoaded extends JobsState {
     this.selectedModality = JobModalityFilter.all,
     this.errorMessage,
     this.successMessage,
+    this.hasMoreNewJobs = false,
+    this.isLoadingMoreNewJobs = false,
+    this.newJobsOffset = 0,
+    this.newJobsPaginationError,
   });
 
   /// Active list of jobs currently displayed (filtered by search query, modality, and non-archived).
@@ -48,6 +52,18 @@ final class JobsLoaded extends JobsState {
 
   /// Optional success confirmation message for user notifications.
   final String? successMessage;
+
+  /// Whether there are more new jobs available to be paginated in the "Nova" column.
+  final bool hasMoreNewJobs;
+
+  /// Whether the "Nova" column is currently loading more paginated jobs.
+  final bool isLoadingMoreNewJobs;
+
+  /// Current offset of loaded new jobs for pagination.
+  final int newJobsOffset;
+
+  /// Optional error message when loading more new jobs fails.
+  final String? newJobsPaginationError;
 
   /// Whether any filter (text search or modality) is actively filtering the jobs.
   bool get hasActiveFilter =>
@@ -70,9 +86,14 @@ final class JobsLoaded extends JobsState {
     JobModalityFilter? selectedModality,
     String? errorMessage,
     String? successMessage,
+    bool? hasMoreNewJobs,
+    bool? isLoadingMoreNewJobs,
+    int? newJobsOffset,
+    String? newJobsPaginationError,
     bool clearSearchQuery = false,
     bool clearErrorMessage = false,
     bool clearSuccessMessage = false,
+    bool clearNewJobsPaginationError = false,
   }) {
     return JobsLoaded(
       jobs ?? this.jobs,
@@ -84,6 +105,12 @@ final class JobsLoaded extends JobsState {
           clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
       successMessage:
           clearSuccessMessage ? null : (successMessage ?? this.successMessage),
+      hasMoreNewJobs: hasMoreNewJobs ?? this.hasMoreNewJobs,
+      isLoadingMoreNewJobs: isLoadingMoreNewJobs ?? this.isLoadingMoreNewJobs,
+      newJobsOffset: newJobsOffset ?? this.newJobsOffset,
+      newJobsPaginationError: clearNewJobsPaginationError
+          ? null
+          : (newJobsPaginationError ?? this.newJobsPaginationError),
     );
   }
 
@@ -96,7 +123,10 @@ final class JobsLoaded extends JobsState {
         other.searchQuery == searchQuery &&
         other.selectedModality == selectedModality &&
         other.errorMessage == errorMessage &&
-        other.successMessage == successMessage;
+        other.successMessage == successMessage &&
+        other.hasMoreNewJobs == hasMoreNewJobs &&
+        other.isLoadingMoreNewJobs == isLoadingMoreNewJobs &&
+        other.newJobsPaginationError == newJobsPaginationError;
   }
 
   @override
@@ -107,6 +137,9 @@ final class JobsLoaded extends JobsState {
         selectedModality,
         errorMessage,
         successMessage,
+        hasMoreNewJobs,
+        isLoadingMoreNewJobs,
+        newJobsPaginationError,
       );
 }
 
@@ -125,3 +158,6 @@ final class JobsError extends JobsState {
   @override
   int get hashCode => message.hashCode;
 }
+
+/// Backwards-compatible alias for [JobsState].
+typedef KanbanState = JobsState;

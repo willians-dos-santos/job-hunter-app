@@ -280,5 +280,103 @@ void main() {
       expect(captured.first, isA<UserJobInteraction>());
       expect((captured.first as UserJobInteraction).userId, 'usr-test-123');
     });
+
+    test('delegates getNewJobs with default parameters and configured userId', () async {
+      when(() => mockDataSource.getNewJobs(
+            limit: 20,
+            offset: 0,
+            userId: 'usr-test-123',
+          )).thenAnswer((_) async => [testJob]);
+
+      final result = await repository.getNewJobs();
+
+      expect(result, [testJob]);
+      verify(() => mockDataSource.getNewJobs(
+            limit: 20,
+            offset: 0,
+            userId: 'usr-test-123',
+          )).called(1);
+    });
+
+    test('delegates getNewJobs with custom limit, offset, and overridden userId', () async {
+      when(() => mockDataSource.getNewJobs(
+            limit: 10,
+            offset: 40,
+            userId: 'custom-user',
+          )).thenAnswer((_) async => [testJob]);
+
+      final result = await repository.getNewJobs(
+        limit: 10,
+        offset: 40,
+        userId: 'custom-user',
+      );
+
+      expect(result, [testJob]);
+      verify(() => mockDataSource.getNewJobs(
+            limit: 10,
+            offset: 40,
+            userId: 'custom-user',
+          )).called(1);
+    });
+
+    test('propagates JobFetchFailure from getNewJobs', () async {
+      when(() => mockDataSource.getNewJobs(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+            userId: any(named: 'userId'),
+          )).thenThrow(const JobFetchFailure('Erro view novas'));
+
+      expect(
+        () => repository.getNewJobs(),
+        throwsA(isA<JobFetchFailure>()),
+      );
+    });
+
+    test('delegates getActivePipelineJobs without limit by default and configured userId', () async {
+      when(() => mockDataSource.getActivePipelineJobs(
+            userId: 'usr-test-123',
+          )).thenAnswer((_) async => [testJob]);
+
+      final result = await repository.getActivePipelineJobs();
+
+      expect(result, [testJob]);
+      verify(() => mockDataSource.getActivePipelineJobs(
+            userId: 'usr-test-123',
+          )).called(1);
+    });
+
+    test('delegates getActivePipelineJobs with custom pagination and overridden userId', () async {
+      when(() => mockDataSource.getActivePipelineJobs(
+            limit: 30,
+            offset: 15,
+            userId: 'custom-usr-2',
+          )).thenAnswer((_) async => [testJob]);
+
+      final result = await repository.getActivePipelineJobs(
+        limit: 30,
+        offset: 15,
+        userId: 'custom-usr-2',
+      );
+
+      expect(result, [testJob]);
+      verify(() => mockDataSource.getActivePipelineJobs(
+            limit: 30,
+            offset: 15,
+            userId: 'custom-usr-2',
+          )).called(1);
+    });
+
+    test('propagates JobFetchFailure from getActivePipelineJobs', () async {
+      when(() => mockDataSource.getActivePipelineJobs(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+            userId: any(named: 'userId'),
+          )).thenThrow(const JobFetchFailure('Erro view pipeline ativo'));
+
+      expect(
+        () => repository.getActivePipelineJobs(),
+        throwsA(isA<JobFetchFailure>()),
+      );
+    });
   });
 }

@@ -300,6 +300,23 @@ class _JobsKanbanPageState extends State<JobsKanbanPage> {
                                           status: JobStatus.values[i],
                                           jobs: state.jobsByStatus(
                                               JobStatus.values[i]),
+                                          hasMore: JobStatus.values[i] ==
+                                                  JobStatus.newJob
+                                              ? state.hasMoreNewJobs
+                                              : false,
+                                          isLoadingMore: JobStatus.values[i] ==
+                                                  JobStatus.newJob
+                                              ? state.isLoadingMoreNewJobs
+                                              : false,
+                                          onLoadMore: JobStatus.values[i] ==
+                                                  JobStatus.newJob
+                                              ? () => cubit.loadMoreNewJobs()
+                                              : null,
+                                          paginationError:
+                                              JobStatus.values[i] ==
+                                                      JobStatus.newJob
+                                                  ? state.newJobsPaginationError
+                                                  : null,
                                           onJobTap: (job) {
                                             showJobDetailsModal(
                                               context,

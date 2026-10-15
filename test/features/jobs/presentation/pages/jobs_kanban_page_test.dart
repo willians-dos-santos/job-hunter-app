@@ -103,9 +103,34 @@ void main() {
     createdAt: DateTime.now(),
   );
 
+  void stubJobsResponse(List<JobItem> allJobs) {
+    final newJobs = allJobs.where((j) => j.status == JobStatus.newJob).toList();
+    final pipelineJobs =
+        allJobs.where((j) => j.status != JobStatus.newJob).toList();
+
+    when(() => mockRepository.getNewJobs(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+          userId: any(named: 'userId'),
+        )).thenAnswer((_) async => newJobs);
+    when(() => mockRepository.getActivePipelineJobs(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+          userId: any(named: 'userId'),
+        )).thenAnswer((_) async => pipelineJobs);
+    when(() => mockRepository.getJobs(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+          statusFilter: any(named: 'statusFilter'),
+          query: any(named: 'query'),
+          userId: any(named: 'userId'),
+        )).thenAnswer((_) async => allJobs);
+  }
+
   setUp(() {
     mockRepository = MockJobsRepository();
     cubit = JobsCubit(mockRepository);
+    stubJobsResponse([]);
   });
 
   tearDown(() {
@@ -128,7 +153,16 @@ void main() {
   group('JobsKanbanPage', () {
     testWidgets('renders KanbanLoadingSkeleton while loading', (tester) async {
       final completer = Completer<List<JobItem>>();
-      when(() => mockRepository.getJobs()).thenAnswer((_) => completer.future);
+      when(() => mockRepository.getNewJobs(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+            userId: any(named: 'userId'),
+          )).thenAnswer((_) => completer.future);
+      when(() => mockRepository.getActivePipelineJobs(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+            userId: any(named: 'userId'),
+          )).thenAnswer((_) async => []);
 
       cubit.loadJobs();
 
@@ -146,8 +180,16 @@ void main() {
 
     testWidgets('renders KanbanErrorView on failure and allows retry',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenThrow(Exception('Falha de conexão com a view v_user_jobs'));
+      when(() => mockRepository.getNewJobs(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+            userId: any(named: 'userId'),
+          )).thenThrow(Exception('Falha de conexão com a view v_new_jobs'));
+      when(() => mockRepository.getActivePipelineJobs(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+            userId: any(named: 'userId'),
+          )).thenAnswer((_) async => []);
 
       await cubit.loadJobs();
 
@@ -159,8 +201,7 @@ void main() {
       expect(find.text('Tentar novamente'), findsOneWidget);
 
       // Now prepare mock for retry success
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1, testJob2]);
+      stubJobsResponse([testJob1, testJob2]);
 
       await tester.tap(find.text('Tentar novamente'));
       await tester.pumpAndSettle();
@@ -172,8 +213,7 @@ void main() {
 
     testWidgets('renders all 5 funnel columns and filters jobs by search query',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1, testJob2, testJob3]);
+      stubJobsResponse([testJob1, testJob2, testJob3]);
 
       await cubit.loadJobs();
 
@@ -217,7 +257,7 @@ void main() {
 
     testWidgets('displays SnackBar and reverts state when action rollback occurs',
         (tester) async {
-      when(() => mockRepository.getJobs()).thenAnswer((_) async => [testJob1]);
+      stubJobsResponse([testJob1]);
       when(() => mockRepository.updateJobStatus(
             jobId: '1',
             newStatus: 'interviewing',
@@ -241,8 +281,7 @@ void main() {
 
     testWidgets('supports horizontal scrolling across all 5 columns on narrow viewports',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1, testJob2, testJob3]);
+      stubJobsResponse([testJob1, testJob2, testJob3]);
 
       await cubit.loadJobs();
 
@@ -274,8 +313,7 @@ void main() {
     testWidgets(
         'archives job from card action menu and displays confirmation SnackBar',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1]);
+      stubJobsResponse([testJob1]);
       when(() => mockRepository.toggleJobArchived(
             jobId: '1',
             isArchived: true,
@@ -315,8 +353,7 @@ void main() {
     testWidgets(
         'moves job status from card action menu and updates funnel',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1]);
+      stubJobsResponse([testJob1]);
       when(() => mockRepository.updateJobStatus(
             jobId: '1',
             newStatus: 'interviewing',
@@ -345,8 +382,7 @@ void main() {
     testWidgets(
         'moves job status when card is dragged and dropped to another column',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1]);
+      stubJobsResponse([testJob1]);
       when(() => mockRepository.updateJobStatus(
             jobId: '1',
             newStatus: 'interviewing',
@@ -384,8 +420,7 @@ void main() {
 
     testWidgets('opens JobDetailsModal when a card is tapped and saves notes',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1]);
+      stubJobsResponse([testJob1]);
       when(() => mockRepository.updateJobNotes(
             jobId: '1',
             notes: 'Nova anotação sobre a vaga',
@@ -428,8 +463,7 @@ void main() {
 
     testWidgets('debounces search input by ~400ms before applying filter',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1, testJob2]);
+      stubJobsResponse([testJob1, testJob2]);
 
       await cubit.loadJobs();
       await tester.pumpWidget(buildSubject());
@@ -456,8 +490,7 @@ void main() {
     testWidgets(
         'filters jobs when modality chips are tapped and updates job counter',
         (tester) async {
-      when(() => mockRepository.getJobs()).thenAnswer((_) async =>
-          [testJobRemote, testJobHybrid, testJobOnSite]);
+      stubJobsResponse([testJobRemote, testJobHybrid, testJobOnSite]);
 
       await cubit.loadJobs();
       await tester.pumpWidget(buildSubject());
@@ -511,8 +544,7 @@ void main() {
     testWidgets(
         'renders contextual empty state when search or filter yields no results and resets filters',
         (tester) async {
-      when(() => mockRepository.getJobs()).thenAnswer((_) async =>
-          [testJobRemote, testJobHybrid, testJobOnSite]);
+      stubJobsResponse([testJobRemote, testJobHybrid, testJobOnSite]);
 
       await cubit.loadJobs();
       await tester.pumpWidget(buildSubject());
@@ -555,8 +587,7 @@ void main() {
     testWidgets(
         'empty filtered state adapts without overflow on reduced vertical viewport',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJobRemote]);
+      stubJobsResponse([testJobRemote]);
 
       await cubit.loadJobs();
 
@@ -591,8 +622,7 @@ void main() {
     testWidgets(
         'unfocuses search text field when tapping outside on the background',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1, testJob2]);
+      stubJobsResponse([testJob1, testJob2]);
 
       await cubit.loadJobs();
       await tester.pumpWidget(buildSubject());
@@ -617,8 +647,7 @@ void main() {
     testWidgets(
         'navigates to ArchivedJobsScreen and re-synchronizes jobs on return',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1]);
+      stubJobsResponse([testJob1]);
       when(() => mockRepository.getArchivedJobs())
           .thenAnswer((_) async => []);
 
@@ -640,17 +669,18 @@ void main() {
 
       expect(find.byType(ArchivedJobsScreen), findsNothing);
       expect(find.byType(JobsKanbanPage), findsOneWidget);
-      // Sincronizou chamando getJobs novamente
-      verify(() => mockRepository.getJobs()).called(2);
+      // Sincronizou chamando getNewJobs novamente
+      verify(() => mockRepository.getNewJobs(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+            userId: any(named: 'userId'),
+          )).called(2);
     });
 
     testWidgets(
         'navigates to AnalyticsDashboardScreen and re-synchronizes jobs on return',
         (tester) async {
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1]);
-      when(() => mockRepository.getJobs(limit: any(named: 'limit')))
-          .thenAnswer((_) async => [testJob1]);
+      stubJobsResponse([testJob1]);
 
       await cubit.loadJobs();
       await tester.pumpWidget(buildSubject());
@@ -670,8 +700,12 @@ void main() {
 
       expect(find.byType(AnalyticsDashboardScreen), findsNothing);
       expect(find.byType(JobsKanbanPage), findsOneWidget);
-      // Sincronizou chamando getJobs novamente
-      verify(() => mockRepository.getJobs()).called(2);
+      // Sincronizou chamando getNewJobs novamente
+      verify(() => mockRepository.getNewJobs(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+            userId: any(named: 'userId'),
+          )).called(2);
     });
 
     testWidgets('navigates to SearchConfigsScreen from AppBar', (tester) async {
@@ -679,10 +713,7 @@ void main() {
       when(() => mockSearchConfigsRepository.getConfigs())
           .thenAnswer((_) async => []);
 
-      when(() => mockRepository.getJobs())
-          .thenAnswer((_) async => [testJob1]);
-      when(() => mockRepository.getJobs(limit: any(named: 'limit')))
-          .thenAnswer((_) async => [testJob1]);
+      stubJobsResponse([testJob1]);
 
       await cubit.loadJobs();
       await tester.pumpWidget(buildSubject(
@@ -704,6 +735,34 @@ void main() {
 
       expect(find.byType(SearchConfigsScreen), findsNothing);
       expect(find.byType(JobsKanbanPage), findsOneWidget);
+    });
+
+    testWidgets(
+        'renders pagination button in Nova column and calls loadMoreNewJobs on tap',
+        (tester) async {
+      final pagingCubit = JobsCubit(mockRepository, newJobsPageSize: 1);
+
+      when(() => mockRepository.getNewJobs(limit: 1, offset: 0))
+          .thenAnswer((_) async => [testJob1]);
+      when(() => mockRepository.getActivePipelineJobs())
+          .thenAnswer((_) async => []);
+      when(() => mockRepository.getNewJobs(limit: 1, offset: 1))
+          .thenAnswer((_) async => [testJob2]);
+
+      await pagingCubit.loadJobs();
+
+      await tester.pumpWidget(buildSubject(customCubit: pagingCubit));
+      await tester.pumpAndSettle();
+
+      final loadMoreBtn =
+          find.byKey(const ValueKey('kanban_column_load_more_button'));
+      expect(loadMoreBtn, findsOneWidget);
+
+      await tester.tap(loadMoreBtn);
+      await tester.pumpAndSettle();
+
+      verify(() => mockRepository.getNewJobs(limit: 1, offset: 1)).called(1);
+      await pagingCubit.close();
     });
   });
 }

@@ -23,6 +23,24 @@ abstract class IJobRemoteDataSource {
     String? userId,
   });
 
+  /// Queries triage inbox vacancies from `v_new_jobs`.
+  ///
+  /// Ordered by `created_at desc` with dedicated offset pagination.
+  Future<List<JobItem>> getNewJobs({
+    int limit = 20,
+    int offset = 0,
+    String? userId,
+  });
+
+  /// Queries active pipeline vacancies from `v_active_pipeline_jobs`.
+  ///
+  /// Ordered by `interaction_updated_at desc` without aggressive pagination limits.
+  Future<List<JobItem>> getActivePipelineJobs({
+    int? limit,
+    int? offset,
+    String? userId,
+  });
+
   /// Queries archived vacancies from `v_user_jobs` where `is_archived = true`
   /// associated with the authenticated user.
   Future<List<JobItem>> getArchivedJobs({
@@ -196,6 +214,133 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
   }
 
   @override
+  Future<List<JobItem>> getNewJobs({
+    int limit = 20,
+    int offset = 0,
+    String? userId,
+  }) async {
+    try {
+      final effectiveUserId = _resolveUserId(userId);
+      debugPrint(
+        '[JobRemoteDataSource.getNewJobs] Querying ${AppConstants.newJobsView} with params: '
+        'limit=$limit, offset=$offset, userId=$effectiveUserId',
+      );
+
+      dynamic builder = _client
+          .from(AppConstants.newJobsView)
+          .select();
+
+      builder = builder.order('created_at', ascending: false);
+
+      final start = offset < 0 ? 0 : offset;
+      if (limit > 0) {
+        builder = builder.range(start, start + limit - 1);
+      }
+
+      final response = await builder;
+      final rawList = response is List ? response : <dynamic>[];
+      debugPrint(
+        '[JobRemoteDataSource.getNewJobs] Response raw received (${rawList.length} items): $response',
+      );
+
+      final list = rawList.cast<Map<String, dynamic>>();
+      return list.map(JobItem.fromJson).toList();
+    } on PostgrestException catch (e) {
+      debugPrint(
+        '[JobRemoteDataSource.getNewJobs] PostgrestException: ${e.message} (code: ${e.code}, details: ${e.details})',
+      );
+      throw JobFetchFailure(e.message, code: e.code, details: e.details);
+    } catch (e) {
+      debugPrint('[JobRemoteDataSource.getNewJobs] Error: $e');
+      if (e is AppException) rethrow;
+      throw JobFetchFailure('Erro ao buscar vagas novas: $e', details: e);
+    }
+  }
+
+  @override
+  Future<List<JobItem>> getActivePipelineJobs({
+    int? limit,
+    int? offset,
+    String? userId,
+  }) async {
+    try {
+      final effectiveUserId = _resolveUserId(userId);
+      debugPrint(
+        '[JobRemoteDataSource.getActivePipelineJobs] Querying ${AppConstants.activePipelineJobsView} with params: '
+        'limit=$limit, offset=$offset, userId=$effectiveUserId',
+      );
+
+      dynamic builder = _client
+          .from(AppConstants.activePipelineJobsView)
+          .select();
+
+      builder = builder.order('interaction_updated_at', ascending: false);
+
+      if (offset != null && offset >= 0 && limit != null && limit > 0) {
+        builder = builder.range(offset, offset + limit - 1);
+      } else if (limit != null && limit > 0) {
+        builder = builder.range(0, limit - 1);
+      }
+
+      final response = await builder;
+      // Log detalhado para diagnóstico do pipeline ativo
+      // ignore: avoid_print
+      print('[KanbanDebug] Active Pipeline response: $response');
+
+      final rawList = response is List ? response : <dynamic>[];
+      debugPrint(
+        '[JobRemoteDataSource.getActivePipelineJobs] Response raw received (${rawList.length} items): $response',
+      );
+
+      final authUser = _tryGetAuthUserId();
+      if (rawList.isEmpty && authUser == null && effectiveUserId != null && effectiveUserId.isNotEmpty) {
+        debugPrint(
+          '[KanbanDebug] AVISO: auth.currentUser é nulo. A view ${AppConstants.activePipelineJobsView} '
+          'depende de auth.uid() no PostgreSQL e retornou lista vazia. '
+          'Executando fallback para ${AppConstants.userJobsView} usando effectiveUserId=$effectiveUserId',
+        );
+        try {
+          dynamic fallbackBuilder = _client
+              .from(AppConstants.userJobsView)
+              .select()
+              .neq('status', 'new')
+              .eq('is_archived', false)
+              .eq('user_id', effectiveUserId);
+
+          fallbackBuilder = fallbackBuilder.order('interaction_updated_at', ascending: false);
+
+          if (offset != null && offset >= 0 && limit != null && limit > 0) {
+            fallbackBuilder = fallbackBuilder.range(offset, offset + limit - 1);
+          } else if (limit != null && limit > 0) {
+            fallbackBuilder = fallbackBuilder.range(0, limit - 1);
+          }
+
+          final fallbackResponse = await fallbackBuilder;
+          // ignore: avoid_print
+          print('[KanbanDebug] Active Pipeline response (from fallback ${AppConstants.userJobsView}): $fallbackResponse');
+          final fallbackList = fallbackResponse is List ? fallbackResponse : <dynamic>[];
+          final list = fallbackList.cast<Map<String, dynamic>>();
+          return list.map(JobItem.fromJson).toList();
+        } catch (fallbackError) {
+          debugPrint('[KanbanDebug] Erro no fallback de pipeline ativo em ${AppConstants.userJobsView}: $fallbackError');
+        }
+      }
+
+      final list = rawList.cast<Map<String, dynamic>>();
+      return list.map(JobItem.fromJson).toList();
+    } on PostgrestException catch (e) {
+      debugPrint(
+        '[JobRemoteDataSource.getActivePipelineJobs] PostgrestException: ${e.message} (code: ${e.code}, details: ${e.details})',
+      );
+      throw JobFetchFailure(e.message, code: e.code, details: e.details);
+    } catch (e) {
+      debugPrint('[JobRemoteDataSource.getActivePipelineJobs] Error: $e');
+      if (e is AppException) rethrow;
+      throw JobFetchFailure('Erro ao buscar pipeline ativo: $e', details: e);
+    }
+  }
+
+  @override
   Future<List<JobItem>> getArchivedJobs({
     int limit = 50,
     int offset = 0,
@@ -289,6 +434,13 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
     required String newStatus,
     String? userId,
   }) async {
+    final cleanJobId = jobId.trim();
+    if (cleanJobId.isEmpty) {
+      throw JobMutationFailure(
+        'Identificador da vaga (job_id) não pode ser vazio para atualizar status.',
+      );
+    }
+
     try {
       final effectiveUserId = _resolveUserId(userId);
       final normalizedStatus = JobStatus.fromString(newStatus).value;
@@ -308,7 +460,7 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       }
 
       final payload = <String, dynamic>{
-        'job_id': jobId,
+        'job_id': cleanJobId,
         if (effectiveUserId != null && effectiveUserId.isNotEmpty)
           'user_id': effectiveUserId,
         'status': normalizedStatus,
@@ -374,10 +526,16 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
     required String notes,
     String? userId,
   }) async {
+    final cleanJobId = jobId.trim();
+    if (cleanJobId.isEmpty) {
+      throw JobMutationFailure(
+        'Identificador da vaga (job_id) não pode ser vazio para atualizar anotações.',
+      );
+    }
     try {
       final effectiveUserId = _resolveUserId(userId);
       final payload = <String, dynamic>{
-        'job_id': jobId,
+        'job_id': cleanJobId,
         if (effectiveUserId != null && effectiveUserId.isNotEmpty)
           'user_id': effectiveUserId,
         'notes': notes,
@@ -400,7 +558,7 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
       debugPrint('[JobRemoteDataSource.updateJobNotes] Upsert successful');
     } on PostgrestException catch (e) {
       debugPrint(
-        '[JobRemoteDataSource.updateJobNotes] PostgrestException (jobId=$jobId):\n'
+        '[JobRemoteDataSource.updateJobNotes] PostgrestException (jobId=$cleanJobId):\n'
         '  message: ${e.message}\n'
         '  code: ${e.code}\n'
         '  details: ${e.details}\n'
@@ -427,10 +585,16 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
     required bool isArchived,
     String? userId,
   }) async {
+    final cleanJobId = jobId.trim();
+    if (cleanJobId.isEmpty) {
+      throw JobMutationFailure(
+        'Identificador da vaga (job_id) não pode ser vazio para alternar arquivamento.',
+      );
+    }
     try {
       final effectiveUserId = _resolveUserId(userId);
       final payload = <String, dynamic>{
-        'job_id': jobId,
+        'job_id': cleanJobId,
         if (effectiveUserId != null && effectiveUserId.isNotEmpty)
           'user_id': effectiveUserId,
         'status': isArchived ? 'archived' : 'new',

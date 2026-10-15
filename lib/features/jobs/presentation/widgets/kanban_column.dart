@@ -19,6 +19,10 @@ class KanbanColumn extends StatelessWidget {
     this.onArchiveJob,
     this.onOpenJobUrl,
     this.onJobDropped,
+    this.hasMore = false,
+    this.isLoadingMore = false,
+    this.onLoadMore,
+    this.paginationError,
   });
 
   final JobStatus status;
@@ -28,6 +32,10 @@ class KanbanColumn extends StatelessWidget {
   final void Function(JobItem job)? onArchiveJob;
   final void Function(JobItem job)? onOpenJobUrl;
   final void Function(JobItem job, JobStatus targetStatus)? onJobDropped;
+  final bool hasMore;
+  final bool isLoadingMore;
+  final VoidCallback? onLoadMore;
+  final String? paginationError;
 
   @override
   Widget build(BuildContext context) {
@@ -87,26 +95,52 @@ class KanbanColumn extends StatelessWidget {
               // Scrollable Card List
               Expanded(
                 child: jobs.isEmpty
-                    ? _buildEmptyState(context, statusColor)
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(12),
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        primary: false,
-                        itemCount: jobs.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final job = jobs[index];
-                          return JobCard(
-                            key: ValueKey('job_card_${job.jobId}'),
-                            job: job,
-                            onTap: () => onJobTap?.call(job),
-                            onMoveStatus: (newStatus) =>
-                                onMoveJobStatus?.call(job, newStatus),
-                            onArchive: () => onArchiveJob?.call(job),
-                            onOpenUrl: () => onOpenJobUrl?.call(job),
-                          );
+                    ? (isLoadingMore
+                        ? _buildEmptyLoadingState(context, statusColor)
+                        : (paginationError != null
+                            ? _buildEmptyErrorState(context, statusColor)
+                            : _buildEmptyState(context, statusColor)))
+                    : NotificationListener<ScrollNotification>(
+                        onNotification: (ScrollNotification scrollInfo) {
+                          if (hasMore &&
+                              !isLoadingMore &&
+                              paginationError == null &&
+                              onLoadMore != null) {
+                            if (scrollInfo.metrics.pixels >=
+                                scrollInfo.metrics.maxScrollExtent - 60) {
+                              onLoadMore!();
+                            }
+                          }
+                          return false;
                         },
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(12),
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          primary: false,
+                          itemCount: jobs.length +
+                              (hasMore ||
+                                      isLoadingMore ||
+                                      paginationError != null
+                                  ? 1
+                                  : 0),
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            if (index < jobs.length) {
+                              final job = jobs[index];
+                              return JobCard(
+                                key: ValueKey('job_card_${job.jobId}'),
+                                job: job,
+                                onTap: () => onJobTap?.call(job),
+                                onMoveStatus: (newStatus) =>
+                                    onMoveJobStatus?.call(job, newStatus),
+                                onArchive: () => onArchiveJob?.call(job),
+                                onOpenUrl: () => onOpenJobUrl?.call(job),
+                              );
+                            }
+                            return _buildPaginationFooter(context, statusColor);
+                          },
+                        ),
                       ),
               ),
             ],
@@ -228,5 +262,196 @@ class KanbanColumn extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildEmptyLoadingState(BuildContext context, Color statusColor) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Carregando vagas...',
+              style: AppTypography.mono(
+                fontSize: 12,
+                color: AppColors.textSlate400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyErrorState(BuildContext context, Color statusColor) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.slate800,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.kanbanRejected.withAlpha(120)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                paginationError ?? 'Erro ao carregar vagas',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.kanbanRejected,
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                key: const ValueKey('kanban_column_empty_retry_button'),
+                onPressed: onLoadMore,
+                icon: const Icon(
+                  Icons.refresh_rounded,
+                  size: 14,
+                  color: AppColors.terminalCyan,
+                ),
+                label: Text(
+                  'Tentar novamente',
+                  style: AppTypography.monoTag(color: AppColors.terminalCyan),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.slate700),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaginationFooter(BuildContext context, Color statusColor) {
+    if (isLoadingMore) {
+      return Container(
+        key: const ValueKey('kanban_column_loading_more'),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Carregando mais vagas...',
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.mono(
+                  fontSize: 12,
+                  color: AppColors.textSlate400,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (paginationError != null) {
+      return Container(
+        key: const ValueKey('kanban_column_pagination_error'),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.slate800,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.kanbanRejected.withAlpha(100)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              paginationError!,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.kanbanRejected,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            InkWell(
+              key: const ValueKey('kanban_column_retry_button'),
+              onTap: onLoadMore,
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.refresh_rounded,
+                      size: 14,
+                      color: AppColors.terminalCyan,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Tentar novamente',
+                      style:
+                          AppTypography.monoTag(color: AppColors.terminalCyan),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (hasMore) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        alignment: Alignment.center,
+        child: TextButton.icon(
+          key: const ValueKey('kanban_column_load_more_button'),
+          onPressed: onLoadMore,
+          icon: const Icon(
+            Icons.expand_more_rounded,
+            size: 16,
+            color: AppColors.terminalCyan,
+          ),
+          label: Text(
+            'Carregar mais vagas',
+            style: AppTypography.monoTag(color: AppColors.textWhite),
+          ),
+          style: TextButton.styleFrom(
+            backgroundColor: AppColors.slate800,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: const BorderSide(color: AppColors.slate700),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }

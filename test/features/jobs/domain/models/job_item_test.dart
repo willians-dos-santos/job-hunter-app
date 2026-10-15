@@ -45,6 +45,23 @@ void main() {
       expect(item.jobId, '9999');
     });
 
+    test('correctly parses id column as jobId when job_id is missing', () {
+      final json = <String, dynamic>{
+        'id': 'solides_12345',
+        'title': 'Engenheiro de Software',
+        'company': 'Tech Corp',
+        'ats': 'solides',
+        'url': 'https://vagas.solides.com.br/12345',
+      };
+
+      final item = JobItem.fromJson(json);
+      expect(item.jobId, 'solides_12345');
+      expect(item.title, 'Engenheiro de Software');
+      expect(item.companyName, 'Tech Corp');
+      expect(item.platform, 'solides');
+      expect(item.jobUrl, 'https://vagas.solides.com.br/12345');
+    });
+
     test('gracefully handles null optional fields and provides display fallbacks', () {
       final minimalJson = <String, dynamic>{
         'job_id': 'job-102',
@@ -202,6 +219,22 @@ void main() {
       expect(original.hashCode, cloned.hashCode);
       expect(original == modified, isFalse);
       expect(modified.status, JobStatus.offer);
+    });
+
+    test('correctly parses pipeline_status when status key is absent', () {
+      final jsonWithPipelineStatus = <String, dynamic>{
+        'job_id': 'job-303',
+        'title': 'Senior Dart Developer',
+        'company_name': 'Dart Corp',
+        'platform': 'LinkedIn',
+        'job_url': 'https://example.com/303',
+        'pipeline_status': 'interviewing',
+      };
+
+      final item = JobItem.fromJson(jsonWithPipelineStatus);
+
+      expect(item.jobId, 'job-303');
+      expect(item.status, JobStatus.interview);
     });
   });
 }

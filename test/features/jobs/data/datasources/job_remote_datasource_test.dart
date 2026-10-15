@@ -421,6 +421,17 @@ void main() {
             .having((e) => e.message, 'message', contains('Network dropped'))),
       );
     });
+
+    test('throws JobMutationFailure immediately when jobId is empty or whitespace', () async {
+      expect(
+        () => dataSource.updateJobStatus(
+          jobId: '   ',
+          newStatus: 'applied',
+        ),
+        throwsA(isA<JobMutationFailure>()
+            .having((e) => e.message, 'message', contains('não pode ser vazio'))),
+      );
+    });
   });
 
   group('JobRemoteDataSource - updateJobNotes', () {
@@ -637,6 +648,180 @@ void main() {
       expect(
         () => dataSource.upsertInteraction(interaction),
         throwsA(isA<JobMutationFailure>()),
+      );
+    });
+  });
+
+  group('JobRemoteDataSource - getNewJobs', () {
+    test('fetches new jobs from v_new_jobs ordered by created_at desc with default range(0, 19)', () async {
+      int? capturedFrom;
+      int? capturedTo;
+      String? capturedOrderCol;
+      bool? capturedAscending;
+
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [sampleJobJson],
+        onOrder: (col, asc) {
+          capturedOrderCol = col;
+          capturedAscending = asc;
+        },
+        onRange: (from, to) {
+          capturedFrom = from;
+          capturedTo = to;
+        },
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      final jobs = await dataSource.getNewJobs();
+
+      expect(jobs.length, 1);
+      expect(jobs.first.jobId, 'job-123');
+      expect(capturedFrom, 0);
+      expect(capturedTo, 19);
+      expect(capturedOrderCol, 'created_at');
+      expect(capturedAscending, isFalse);
+      verify(() => mockClient.from(AppConstants.newJobsView)).called(1);
+    });
+
+    test('supports custom limit and offset for new jobs pagination', () async {
+      int? capturedFrom;
+      int? capturedTo;
+
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [sampleJobJson],
+        onRange: (from, to) {
+          capturedFrom = from;
+          capturedTo = to;
+        },
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      final jobs = await dataSource.getNewJobs(limit: 10, offset: 20);
+
+      expect(jobs.length, 1);
+      expect(capturedFrom, 20);
+      expect(capturedTo, 29);
+      verify(() => mockClient.from(AppConstants.newJobsView)).called(1);
+    });
+
+    test('wraps PostgrestException into JobFetchFailure on getNewJobs', () async {
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        error: const PostgrestException(message: 'View error', code: 'P0002'),
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      expect(
+        () => dataSource.getNewJobs(),
+        throwsA(isA<JobFetchFailure>()
+            .having((e) => e.message, 'message', 'View error')
+            .having((e) => e.code, 'code', 'P0002')),
+      );
+    });
+
+    test('wraps generic exception into JobFetchFailure on getNewJobs', () async {
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        error: Exception('Connection lost'),
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      expect(
+        () => dataSource.getNewJobs(),
+        throwsA(isA<JobFetchFailure>()
+            .having((e) => e.message, 'message', contains('Connection lost'))),
+      );
+    });
+  });
+
+  group('JobRemoteDataSource - getActivePipelineJobs', () {
+    test('fetches active pipeline jobs from v_active_pipeline_jobs ordered by interaction_updated_at desc without limit by default', () async {
+      String? capturedOrderCol;
+      bool? capturedAscending;
+      int? capturedFrom;
+
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [
+          {
+            ...sampleJobJson,
+            'status': 'applied',
+            'interaction_updated_at': '2026-10-12T14:00:00.000Z',
+          }
+        ],
+        onOrder: (col, asc) {
+          capturedOrderCol = col;
+          capturedAscending = asc;
+        },
+        onRange: (from, to) {
+          capturedFrom = from;
+        },
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      final jobs = await dataSource.getActivePipelineJobs();
+
+      expect(jobs.length, 1);
+      expect(jobs.first.status, JobStatus.applied);
+      expect(jobs.first.interactionUpdatedAt, isNotNull);
+      expect(capturedOrderCol, 'interaction_updated_at');
+      expect(capturedAscending, isFalse);
+      expect(capturedFrom, isNull);
+      verify(() => mockClient.from(AppConstants.activePipelineJobsView)).called(1);
+    });
+
+    test('supports custom limit and offset when specified for active pipeline jobs', () async {
+      int? capturedFrom;
+      int? capturedTo;
+
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [
+          {
+            ...sampleJobJson,
+            'status': 'interviewing',
+          }
+        ],
+        onRange: (from, to) {
+          capturedFrom = from;
+          capturedTo = to;
+        },
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      final jobs = await dataSource.getActivePipelineJobs(limit: 50, offset: 0);
+
+      expect(jobs.length, 1);
+      expect(capturedFrom, 0);
+      expect(capturedTo, 49);
+      verify(() => mockClient.from(AppConstants.activePipelineJobsView)).called(1);
+    });
+
+    test('wraps PostgrestException into JobFetchFailure on getActivePipelineJobs', () async {
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        error: const PostgrestException(message: 'Active pipeline query error', code: '500'),
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      expect(
+        () => dataSource.getActivePipelineJobs(),
+        throwsA(isA<JobFetchFailure>()),
+      );
+    });
+
+    test('wraps generic exception into JobFetchFailure on getActivePipelineJobs', () async {
+      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        error: Exception('Network timeout'),
+      );
+
+      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+
+      expect(
+        () => dataSource.getActivePipelineJobs(),
+        throwsA(isA<JobFetchFailure>()),
       );
     });
   });

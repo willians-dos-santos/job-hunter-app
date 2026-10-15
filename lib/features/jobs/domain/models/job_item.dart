@@ -20,15 +20,17 @@ class JobItem {
     this.notes,
     this.appliedAt,
     this.publishedAt,
+    this.interactionUpdatedAt,
     this.isArchived = false,
   });
 
-  /// Factory parser for payloads originating from the `v_user_jobs` view.
+  /// Factory parser for payloads originating from the `v_user_jobs`, `v_new_jobs`,
+  /// or `v_active_pipeline_jobs` views.
   ///
   /// Resiliently handles missing, unexpected, and alternative column names
-  /// (such as `company`, `ats`, `url`, `job_created_at`).
+  /// (such as `company`, `ats`, `url`, `job_created_at`, `interaction_updated_at`).
   factory JobItem.fromJson(Map<String, dynamic> json) {
-    final rawJobId = json['job_id'];
+    final rawJobId = json['job_id'] ?? json['id'] ?? json['jobId'];
     final rawTitle = json['title'];
     final rawCompany = json['company_name'] ?? json['company'];
     final rawPlatform = json['platform'] ?? json['ats'];
@@ -36,9 +38,10 @@ class JobItem {
     final rawCreatedAt = json['created_at'] ?? json['job_created_at'];
     final rawAppliedAt = json['applied_at'];
     final rawPublishedAt = json['published_at'];
+    final rawInteractionUpdatedAt = json['interaction_updated_at'];
     final rawIsArchived = json['is_archived'];
     final rawUserId = json['user_id'];
-    final rawStatus = json['status'];
+    final rawStatus = json['status'] ?? json['pipeline_status'];
 
     final createdAtParsed = rawCreatedAt != null
         ? DateTime.tryParse(rawCreatedAt.toString())?.toLocal()
@@ -52,13 +55,17 @@ class JobItem {
         ? DateTime.tryParse(rawPublishedAt.toString())?.toLocal()
         : null;
 
+    final interactionUpdatedAtParsed = rawInteractionUpdatedAt != null
+        ? DateTime.tryParse(rawInteractionUpdatedAt.toString())?.toLocal()
+        : null;
+
     final isArchivedParsed = rawIsArchived == true ||
         rawIsArchived == 1 ||
         rawIsArchived.toString().toLowerCase() == 'true' ||
         rawStatus?.toString().toLowerCase() == 'archived';
 
     return JobItem(
-      jobId: rawJobId?.toString() ?? '',
+      jobId: (rawJobId?.toString() ?? '').trim(),
       userId: rawUserId?.toString(),
       title: rawTitle?.toString() ?? '',
       companyName: rawCompany?.toString() ?? '',
@@ -66,11 +73,12 @@ class JobItem {
       jobUrl: rawUrl?.toString() ?? '',
       location: json['location']?.toString(),
       salaryText: json['salary_text']?.toString(),
-      status: JobStatus.fromString(json['status']?.toString()),
+      status: JobStatus.fromString(rawStatus?.toString()),
       notes: json['notes']?.toString(),
       appliedAt: appliedAtParsed,
       publishedAt: publishedAtParsed,
       createdAt: createdAtParsed ?? publishedAtParsed,
+      interactionUpdatedAt: interactionUpdatedAtParsed,
       isArchived: isArchivedParsed,
     );
   }
@@ -113,6 +121,9 @@ class JobItem {
 
   /// Timestamp when vacancy was ingested (optional, falls back to publishedAt).
   final DateTime? createdAt;
+
+  /// Timestamp of the latest interaction update on the funnel (optional).
+  final DateTime? interactionUpdatedAt;
 
   /// Whether the job has been archived/discarded by the user.
   final bool isArchived;
@@ -218,6 +229,7 @@ class JobItem {
       'applied_at': appliedAt?.toUtc().toIso8601String(),
       'published_at': publishedAt?.toUtc().toIso8601String(),
       'created_at': createdAt?.toUtc().toIso8601String(),
+      'interaction_updated_at': interactionUpdatedAt?.toUtc().toIso8601String(),
       'is_archived': isArchived,
     };
   }
@@ -237,6 +249,7 @@ class JobItem {
     DateTime? appliedAt,
     DateTime? publishedAt,
     DateTime? createdAt,
+    DateTime? interactionUpdatedAt,
     bool? isArchived,
     bool clearNotes = false,
   }) {
@@ -254,6 +267,7 @@ class JobItem {
       appliedAt: appliedAt ?? this.appliedAt,
       publishedAt: publishedAt ?? this.publishedAt,
       createdAt: createdAt ?? this.createdAt,
+      interactionUpdatedAt: interactionUpdatedAt ?? this.interactionUpdatedAt,
       isArchived: isArchived ?? this.isArchived,
     );
   }
@@ -275,6 +289,7 @@ class JobItem {
         other.appliedAt == appliedAt &&
         other.publishedAt == publishedAt &&
         other.createdAt == createdAt &&
+        other.interactionUpdatedAt == interactionUpdatedAt &&
         other.isArchived == isArchived;
   }
 
@@ -293,6 +308,7 @@ class JobItem {
         appliedAt,
         publishedAt,
         createdAt,
+        interactionUpdatedAt,
         isArchived,
       );
 
@@ -304,3 +320,6 @@ class JobItem {
 
 /// Domain entity alias for [JobItem] mapping directly to canonical `v_user_jobs`.
 typedef JobEntity = JobItem;
+
+/// Model alias for [JobItem] used in schema contracts.
+typedef JobModel = JobItem;

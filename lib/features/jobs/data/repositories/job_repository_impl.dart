@@ -58,6 +58,32 @@ class JobRepository implements IJobRepository {
   }
 
   @override
+  Future<List<JobItem>> getNewJobs({
+    int limit = 20,
+    int offset = 0,
+    String? userId,
+  }) {
+    return _remoteDataSource.getNewJobs(
+      limit: limit,
+      offset: offset,
+      userId: userId ?? currentUserId,
+    );
+  }
+
+  @override
+  Future<List<JobItem>> getActivePipelineJobs({
+    int? limit,
+    int? offset,
+    String? userId,
+  }) {
+    return _remoteDataSource.getActivePipelineJobs(
+      limit: limit,
+      offset: offset,
+      userId: userId ?? currentUserId,
+    );
+  }
+
+  @override
   Future<List<JobItem>> getArchivedJobs({
     int limit = 50,
     int offset = 0,

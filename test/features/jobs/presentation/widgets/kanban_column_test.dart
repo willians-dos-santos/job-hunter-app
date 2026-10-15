@@ -47,6 +47,10 @@ void main() {
     void Function(JobItem, JobStatus)? onMoveJobStatus,
     void Function(JobItem)? onArchiveJob,
     void Function(JobItem, JobStatus)? onJobDropped,
+    bool hasMore = false,
+    bool isLoadingMore = false,
+    VoidCallback? onLoadMore,
+    String? paginationError,
   }) {
     return MaterialApp(
       theme: AppTheme.darkTheme,
@@ -62,6 +66,10 @@ void main() {
               onMoveJobStatus: onMoveJobStatus,
               onArchiveJob: onArchiveJob,
               onJobDropped: onJobDropped,
+              hasMore: hasMore,
+              isLoadingMore: isLoadingMore,
+              onLoadMore: onLoadMore,
+              paginationError: paginationError,
             ),
           ),
         ),
@@ -338,6 +346,69 @@ void main() {
 
       expect(droppedJob?.jobId, '1');
       expect(targetStatus, JobStatus.applied);
+    });
+
+    testWidgets('renders pagination load more button when hasMore is true and triggers onLoadMore on tap',
+        (tester) async {
+      var loadMoreCalled = false;
+
+      await tester.pumpWidget(
+        buildSubject(
+          status: JobStatus.newJob,
+          jobs: [testJob1],
+          hasMore: true,
+          onLoadMore: () => loadMoreCalled = true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final loadMoreBtn = find.byKey(const ValueKey('kanban_column_load_more_button'));
+      expect(loadMoreBtn, findsOneWidget);
+      expect(find.text('Carregar mais vagas'), findsOneWidget);
+
+      await tester.tap(loadMoreBtn);
+      await tester.pumpAndSettle();
+
+      expect(loadMoreCalled, isTrue);
+    });
+
+    testWidgets('renders loading more indicator when isLoadingMore is true',
+        (tester) async {
+      await tester.pumpWidget(
+        buildSubject(
+          status: JobStatus.newJob,
+          jobs: [testJob1],
+          isLoadingMore: true,
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('kanban_column_loading_more')), findsOneWidget);
+      expect(find.text('Carregando mais vagas...'), findsOneWidget);
+    });
+
+    testWidgets('renders pagination error message and retry button when paginationError is present',
+        (tester) async {
+      var retryCalled = false;
+
+      await tester.pumpWidget(
+        buildSubject(
+          status: JobStatus.newJob,
+          jobs: [testJob1],
+          paginationError: 'Falha ao buscar próximas vagas',
+          onLoadMore: () => retryCalled = true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('kanban_column_pagination_error')), findsOneWidget);
+      expect(find.text('Falha ao buscar próximas vagas'), findsOneWidget);
+      expect(find.byKey(const ValueKey('kanban_column_retry_button')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('kanban_column_retry_button')));
+      await tester.pumpAndSettle();
+
+      expect(retryCalled, isTrue);
     });
   });
 }

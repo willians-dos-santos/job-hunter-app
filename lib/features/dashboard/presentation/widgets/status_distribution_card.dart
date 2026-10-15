@@ -88,28 +88,33 @@ class StatusDistributionCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Distribuição por Status',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textWhite,
-                      letterSpacing: -0.3,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Distribuição por Status',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textWhite,
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Detalhamento comparativo das etapas do funil',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSlate400,
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Detalhamento comparativo das etapas do funil',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSlate400,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -157,25 +162,36 @@ class StatusDistributionCard extends StatelessWidget {
                       Expanded(
                         child: Row(
                           children: [
-                            Text(
-                              stage.label,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textWhite,
+                            Flexible(
+                              flex: 3,
+                              child: Text(
+                                stage.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textWhite,
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              "('${stage.rawName}')",
-                              style: AppTypography.monoTag(
-                                color: AppColors.textSlate500,
-                                fontSize: 10,
+                            const SizedBox(width: 4),
+                            Flexible(
+                              flex: 2,
+                              child: Text(
+                                "('${stage.rawName}')",
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.monoTag(
+                                  color: AppColors.textSlate500,
+                                  fontSize: 10,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         '${percentage.toStringAsFixed(0)}%',
                         style: const TextStyle(

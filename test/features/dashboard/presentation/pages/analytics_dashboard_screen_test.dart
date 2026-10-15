@@ -292,5 +292,26 @@ void main() {
       expect(find.byType(MetricKpiCard), findsNWidgets(4));
       expect(find.byType(StatusDistributionCard), findsOneWidget);
     });
+
+    testWidgets('adapts responsively on narrow mobile viewport (360x640) without overflow errors',
+        (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      when(() => mockRepository.getJobs(limit: any(named: 'limit')))
+          .thenAnswer((_) async => [testJob1, testJob2, testJob3, testJob4, testJob5, testArchivedJob]);
+
+      await cubit.loadMetrics();
+
+      await tester.pumpWidget(buildSubject());
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(StatusDistributionCard), findsOneWidget);
+      expect(find.text('Distribuição por Status'), findsOneWidget);
+      expect(find.textContaining('VAGAS'), findsOneWidget);
+    });
   });
 }

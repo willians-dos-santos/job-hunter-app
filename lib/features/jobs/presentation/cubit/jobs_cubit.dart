@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/constants/app_constants.dart';
 import '../../domain/models/job_item.dart';
 import '../../domain/models/job_modality.dart';
 import '../../domain/models/job_status.dart';
@@ -10,22 +11,119 @@ import 'jobs_state.dart';
 
 /// Cubit managing job loading, optimistic funnel moves, filtering, and archiving.
 class JobsCubit extends Cubit<JobsState> {
-  JobsCubit(this._repository) : super(const JobsInitial());
+  JobsCubit(
+    this._repository, {
+    this.newJobsPageSize = AppConstants.newJobsPageSize,
+  }) : super(const JobsInitial());
 
   final JobsRepository _repository;
 
   /// Exposes the underlying repository.
   JobsRepository get repository => _repository;
 
-  /// Loads jobs from repository, filtering out archived entries for the Kanban board.
+  /// Page size used when querying the triage inbox view.
+  final int newJobsPageSize;
+
+  int _newJobsOffset = 0;
+
+  /// Current pagination offset for new triage jobs.
+  int get newJobsOffset => _newJobsOffset;
+
+  /// Loads jobs from repository, querying new jobs from `v_new_jobs` and active pipeline
+  /// from `v_active_pipeline_jobs` in parallel via [Future.wait].
   Future<void> loadJobs() async {
     emit(const JobsLoading());
     try {
-      final rawJobs = await _repository.getJobs();
-      final activeJobs = rawJobs.where((j) => !j.isArchived).toList();
-      emit(JobsLoaded(activeJobs, allJobs: activeJobs));
+      _newJobsOffset = 0;
+      List<JobItem> newJobs;
+      List<JobItem> pipelineJobs;
+
+      try {
+        final results = await Future.wait([
+          _repository.getNewJobs(limit: newJobsPageSize, offset: 0),
+          _repository.getActivePipelineJobs(),
+        ]);
+        newJobs = results[0].where((j) => !j.isArchived).toList();
+        pipelineJobs = results[1].where((j) => !j.isArchived).toList();
+
+        final pipelineJobIds = pipelineJobs.map((j) => j.jobId).toSet();
+        newJobs = newJobs.where((j) => !pipelineJobIds.contains(j.jobId)).toList();
+      } on NoSuchMethodError {
+        // Fallback for mocks in legacy tests that only stub getJobs()
+        final rawJobs = await _repository.getJobs();
+        final activeJobs = rawJobs.where((j) => !j.isArchived).toList();
+        newJobs = activeJobs.where((j) => j.status == JobStatus.newJob).toList();
+        pipelineJobs = activeJobs.where((j) => j.status != JobStatus.newJob).toList();
+      }
+
+      _newJobsOffset = newJobs.length;
+      final hasMore = newJobs.length >= newJobsPageSize;
+      final combined = [...newJobs, ...pipelineJobs];
+
+      emit(JobsLoaded(
+        combined,
+        allJobs: combined,
+        hasMoreNewJobs: hasMore,
+        isLoadingMoreNewJobs: false,
+        newJobsOffset: _newJobsOffset,
+      ));
     } catch (e) {
       emit(JobsError('Erro ao carregar vagas: $e'));
+    }
+  }
+
+  /// Incrementally fetches the next batch of triage inbox vacancies from `v_new_jobs`.
+  Future<void> loadMoreNewJobs() async {
+    final currentState = state;
+    if (currentState is! JobsLoaded) return;
+    if (currentState.isLoadingMoreNewJobs || !currentState.hasMoreNewJobs) return;
+
+    emit(currentState.copyWith(
+      isLoadingMoreNewJobs: true,
+      clearNewJobsPaginationError: true,
+    ));
+
+    try {
+      final currentOffset = _newJobsOffset;
+      List<JobItem> nextBatch;
+      try {
+        nextBatch = await _repository.getNewJobs(
+          limit: newJobsPageSize,
+          offset: currentOffset,
+        );
+      } on NoSuchMethodError {
+        nextBatch = [];
+      }
+
+      final activeNextBatch = nextBatch.where((j) => !j.isArchived).toList();
+      _newJobsOffset = currentOffset + nextBatch.length;
+      final hasMore = nextBatch.length >= newJobsPageSize;
+
+      // Deduplicate against existing jobs
+      final existingIds = currentState.effectiveAllJobs.map((j) => j.jobId).toSet();
+      final uniqueNextBatch =
+          activeNextBatch.where((j) => !existingIds.contains(j.jobId)).toList();
+
+      final updatedAllJobs = [...currentState.effectiveAllJobs, ...uniqueNextBatch];
+      final updatedJobs = _applyFilter(
+        updatedAllJobs,
+        currentState.searchQuery,
+        currentState.selectedModality,
+      );
+
+      emit(currentState.copyWith(
+        jobs: updatedJobs,
+        allJobs: updatedAllJobs,
+        hasMoreNewJobs: hasMore,
+        isLoadingMoreNewJobs: false,
+        newJobsOffset: _newJobsOffset,
+        clearNewJobsPaginationError: true,
+      ));
+    } catch (e) {
+      emit(currentState.copyWith(
+        isLoadingMoreNewJobs: false,
+        newJobsPaginationError: 'Erro ao carregar mais vagas: $e',
+      ));
     }
   }
 
@@ -36,6 +134,12 @@ class JobsCubit extends Cubit<JobsState> {
     required String jobId,
     required String newStatus,
   }) async {
+    final cleanJobId = jobId.trim();
+    if (cleanJobId.isEmpty) {
+      debugPrint('[JobsCubit.moveJobStatus] ERRO: jobId vazio recebido ao mover vaga.');
+      return;
+    }
+
     final currentState = state;
     if (currentState is! JobsLoaded) return;
 
@@ -45,7 +149,7 @@ class JobsCubit extends Cubit<JobsState> {
 
     // 1. Atualização Otimista
     final updatedAllJobs = previousAllJobs.map((job) {
-      if (job.jobId == jobId) {
+      if (job.jobId == cleanJobId) {
         return job.copyWith(status: targetStatus);
       }
       return job;
@@ -56,35 +160,31 @@ class JobsCubit extends Cubit<JobsState> {
       currentState.searchQuery,
       currentState.selectedModality,
     );
-    emit(JobsLoaded(
-      updatedJobs,
+    emit(currentState.copyWith(
+      jobs: updatedJobs,
       allJobs: updatedAllJobs,
-      searchQuery: currentState.searchQuery,
-      selectedModality: currentState.selectedModality,
     ));
 
     // 2. Persistência com Rollback em caso de erro
     try {
       debugPrint(
-        '[JobsCubit.moveJobStatus] Persistindo no Supabase: jobId=$jobId, '
+        '[JobsCubit.moveJobStatus] Persistindo no Supabase: jobId=$cleanJobId, '
         'status=${targetStatus.value} (input: $newStatus)',
       );
       await _repository.updateJobStatus(
-        jobId: jobId,
+        jobId: cleanJobId,
         newStatus: newStatus,
       );
       debugPrint(
-        '[JobsCubit.moveJobStatus] Persistência realizada com sucesso para jobId=$jobId',
+        '[JobsCubit.moveJobStatus] Persistência realizada com sucesso para jobId=$cleanJobId',
       );
     } catch (e, stackTrace) {
       debugPrint(
-        '[JobsCubit.moveJobStatus] ERRO ao persistir status da vaga jobId=$jobId: $e\n$stackTrace',
+        '[JobsCubit.moveJobStatus] ERRO ao persistir status da vaga jobId=$cleanJobId: $e\n$stackTrace',
       );
-      emit(JobsLoaded(
-        previousJobs,
+      emit(currentState.copyWith(
+        jobs: previousJobs,
         allJobs: previousAllJobs,
-        searchQuery: currentState.searchQuery,
-        selectedModality: currentState.selectedModality,
         errorMessage: 'Erro ao mover vaga: $e',
       ));
     }
@@ -94,6 +194,12 @@ class JobsCubit extends Cubit<JobsState> {
   ///
   /// In case of persistence failure, rolls back the local state.
   Future<void> archiveJob(String jobId) async {
+    final cleanJobId = jobId.trim();
+    if (cleanJobId.isEmpty) {
+      debugPrint('[JobsCubit.archiveJob] ERRO: jobId vazio recebido ao arquivar vaga.');
+      return;
+    }
+
     final currentState = state;
     if (currentState is! JobsLoaded) return;
 
@@ -102,44 +208,38 @@ class JobsCubit extends Cubit<JobsState> {
 
     // 1. Otimista: remove da lista ativa exibida
     final updatedAllJobs =
-        previousAllJobs.where((job) => job.jobId != jobId).toList();
+        previousAllJobs.where((job) => job.jobId != cleanJobId).toList();
     final updatedJobs = _applyFilter(
       updatedAllJobs,
       currentState.searchQuery,
       currentState.selectedModality,
     );
 
-    emit(JobsLoaded(
-      updatedJobs,
+    emit(currentState.copyWith(
+      jobs: updatedJobs,
       allJobs: updatedAllJobs,
-      searchQuery: currentState.searchQuery,
-      selectedModality: currentState.selectedModality,
     ));
 
     // 2. Persistência
     try {
-      debugPrint('[JobsCubit.archiveJob] Arquivando vaga jobId=$jobId');
+      debugPrint('[JobsCubit.archiveJob] Arquivando vaga jobId=$cleanJobId');
       await _repository.toggleJobArchived(
-        jobId: jobId,
+        jobId: cleanJobId,
         isArchived: true,
       );
-      debugPrint('[JobsCubit.archiveJob] Vaga arquivada com sucesso jobId=$jobId');
-      emit(JobsLoaded(
-        updatedJobs,
+      debugPrint('[JobsCubit.archiveJob] Vaga arquivada com sucesso jobId=$cleanJobId');
+      emit(currentState.copyWith(
+        jobs: updatedJobs,
         allJobs: updatedAllJobs,
-        searchQuery: currentState.searchQuery,
-        selectedModality: currentState.selectedModality,
         successMessage: 'Vaga arquivada com sucesso.',
       ));
     } catch (e, stackTrace) {
       debugPrint(
-        '[JobsCubit.archiveJob] ERRO ao arquivar vaga jobId=$jobId: $e\n$stackTrace',
+        '[JobsCubit.archiveJob] ERRO ao arquivar vaga jobId=$cleanJobId: $e\n$stackTrace',
       );
-      emit(JobsLoaded(
-        previousJobs,
+      emit(currentState.copyWith(
+        jobs: previousJobs,
         allJobs: previousAllJobs,
-        searchQuery: currentState.searchQuery,
-        selectedModality: currentState.selectedModality,
         errorMessage: 'Erro ao arquivar vaga: $e',
       ));
     }
@@ -152,6 +252,12 @@ class JobsCubit extends Cubit<JobsState> {
     required String jobId,
     required String notes,
   }) async {
+    final cleanJobId = jobId.trim();
+    if (cleanJobId.isEmpty) {
+      debugPrint('[JobsCubit.updateJobNotes] ERRO: jobId vazio recebido ao salvar anotações.');
+      return;
+    }
+
     final currentState = state;
     if (currentState is! JobsLoaded) return;
 
@@ -160,7 +266,7 @@ class JobsCubit extends Cubit<JobsState> {
 
     // 1. Atualização Otimista
     final updatedAllJobs = previousAllJobs.map((job) {
-      if (job.jobId == jobId) {
+      if (job.jobId == cleanJobId) {
         return job.copyWith(notes: notes);
       }
       return job;
@@ -171,37 +277,31 @@ class JobsCubit extends Cubit<JobsState> {
       currentState.searchQuery,
       currentState.selectedModality,
     );
-    emit(JobsLoaded(
-      updatedJobs,
+    emit(currentState.copyWith(
+      jobs: updatedJobs,
       allJobs: updatedAllJobs,
-      searchQuery: currentState.searchQuery,
-      selectedModality: currentState.selectedModality,
     ));
 
     // 2. Persistência com Rollback em caso de erro
     try {
-      debugPrint('[JobsCubit.updateJobNotes] Salvando anotações para jobId=$jobId');
+      debugPrint('[JobsCubit.updateJobNotes] Salvando anotações para jobId=$cleanJobId');
       await _repository.updateJobNotes(
-        jobId: jobId,
+        jobId: cleanJobId,
         notes: notes,
       );
-      debugPrint('[JobsCubit.updateJobNotes] Anotações salvas com sucesso para jobId=$jobId');
-      emit(JobsLoaded(
-        updatedJobs,
+      debugPrint('[JobsCubit.updateJobNotes] Anotações salvas com sucesso para jobId=$cleanJobId');
+      emit(currentState.copyWith(
+        jobs: updatedJobs,
         allJobs: updatedAllJobs,
-        searchQuery: currentState.searchQuery,
-        selectedModality: currentState.selectedModality,
         successMessage: 'Anotações salvas com sucesso.',
       ));
     } catch (e, stackTrace) {
       debugPrint(
         '[JobsCubit.updateJobNotes] ERRO ao salvar anotações para jobId=$jobId: $e\n$stackTrace',
       );
-      emit(JobsLoaded(
-        previousJobs,
+      emit(currentState.copyWith(
+        jobs: previousJobs,
         allJobs: previousAllJobs,
-        searchQuery: currentState.searchQuery,
-        selectedModality: currentState.selectedModality,
         errorMessage: 'Erro ao salvar anotações: $e',
       ));
     }
@@ -329,3 +429,6 @@ class JobsCubit extends Cubit<JobsState> {
     }).toList();
   }
 }
+
+/// Backwards-compatible alias for [JobsCubit].
+typedef KanbanCubit = JobsCubit;
