@@ -391,31 +391,147 @@ class JobRemoteDataSource implements IJobRemoteDataSource {
 
   @override
   Future<JobItem> getJobById(String id, {String? userId}) async {
+    final cleanId = id.trim();
+    if (cleanId.isEmpty) {
+      throw JobNotFoundFailure(id);
+    }
+
     try {
       final effectiveUserId = _resolveUserId(userId);
       debugPrint(
-        '[JobRemoteDataSource.getJobById] Querying ${AppConstants.userJobsView} for job_id=$id, userId=$effectiveUserId',
+        '[JobRemoteDataSource.getJobById] Fetching job for id=$cleanId, userId=$effectiveUserId',
       );
 
-      dynamic builder = _client
-          .from(AppConstants.userJobsView)
-          .select()
-          .eq('job_id', id);
-
-      if (effectiveUserId != null) {
-        builder = builder.or('user_id.is.null,user_id.eq.$effectiveUserId');
+      bool isTableOrViewUnavailable(PostgrestException e) {
+        final code = e.code?.toUpperCase();
+        return code == '42P01' ||
+            code == '42501' ||
+            code == 'PGRST200' ||
+            code == 'PGRST204' ||
+            code == 'PGRST205';
       }
 
-      final response = await builder.maybeSingle();
-      debugPrint(
-        '[JobRemoteDataSource.getJobById] Response raw received: $response',
-      );
+      Map<String, dynamic>? jobData;
 
-      if (response == null) {
-        throw JobNotFoundFailure(id);
+      // 1. Consulta prioritária na tabela canônica 'jobs' filtrando por 'id'
+      try {
+        final jobResponse = await _client
+            .from(AppConstants.jobsTable)
+            .select()
+            .eq('id', cleanId)
+            .maybeSingle();
+
+        if (jobResponse != null) {
+          jobData = Map<String, dynamic>.from(jobResponse);
+          jobData['job_id'] = jobData['id'] ?? cleanId;
+
+          // Se houver usuário ativo, busca interação específica em user_job_interactions
+          if (effectiveUserId != null && effectiveUserId.isNotEmpty) {
+            try {
+              final interactionResponse = await _client
+                  .from(AppConstants.userJobInteractionsTable)
+                  .select()
+                  .eq('job_id', cleanId)
+                  .eq('user_id', effectiveUserId)
+                  .maybeSingle();
+
+              if (interactionResponse != null) {
+                jobData['status'] = interactionResponse['status'];
+                jobData['notes'] = interactionResponse['notes'];
+                jobData['applied_at'] = interactionResponse['applied_at'];
+                jobData['is_archived'] = interactionResponse['is_archived'];
+                jobData['user_id'] =
+                    interactionResponse['user_id'] ?? effectiveUserId;
+                jobData['interaction_updated_at'] =
+                    interactionResponse['updated_at'];
+              }
+            } catch (interactionError) {
+              debugPrint(
+                '[JobRemoteDataSource.getJobById] Aviso ao consultar interações da vaga: $interactionError',
+              );
+            }
+          }
+        }
+      } on PostgrestException catch (e) {
+        if (!isTableOrViewUnavailable(e)) rethrow;
+        debugPrint(
+          '[JobRemoteDataSource.getJobById] Tabela jobs indisponível (${e.code}). Tentando views...',
+        );
       }
 
-      return JobItem.fromJson(response);
+      // 2. Se não encontrou na tabela jobs, tenta obter da view v_new_jobs
+      if (jobData == null) {
+        try {
+          final newJobResponse = await _client
+              .from(AppConstants.newJobsView)
+              .select()
+              .eq('job_id', cleanId)
+              .maybeSingle();
+
+          if (newJobResponse != null) {
+            jobData = Map<String, dynamic>.from(newJobResponse);
+          }
+        } on PostgrestException catch (e) {
+          if (!isTableOrViewUnavailable(e)) rethrow;
+          debugPrint(
+            '[JobRemoteDataSource.getJobById] View v_new_jobs indisponível (${e.code}). Tentando próximas...',
+          );
+        }
+      }
+
+      // 3. Se ainda não encontrou, tenta obter da view v_active_pipeline_jobs
+      if (jobData == null) {
+        try {
+          final activeJobResponse = await _client
+              .from(AppConstants.activePipelineJobsView)
+              .select()
+              .eq('job_id', cleanId)
+              .maybeSingle();
+
+          if (activeJobResponse != null) {
+            jobData = Map<String, dynamic>.from(activeJobResponse);
+          }
+        } on PostgrestException catch (e) {
+          if (!isTableOrViewUnavailable(e)) rethrow;
+          debugPrint(
+            '[JobRemoteDataSource.getJobById] View v_active_pipeline_jobs indisponível (${e.code}). Tentando próximas...',
+          );
+        }
+      }
+
+      // 4. Fallback final para v_user_jobs
+      if (jobData == null) {
+        try {
+          dynamic userJobsBuilder = _client
+              .from(AppConstants.userJobsView)
+              .select()
+              .eq('job_id', cleanId);
+
+          if (effectiveUserId != null && effectiveUserId.isNotEmpty) {
+            userJobsBuilder = userJobsBuilder.or(
+              'user_id.is.null,user_id.eq.$effectiveUserId',
+            );
+          }
+
+          final userJobResponse = await userJobsBuilder.maybeSingle();
+          if (userJobResponse != null) {
+            jobData = Map<String, dynamic>.from(
+              userJobResponse as Map<String, dynamic>,
+            );
+          }
+        } on PostgrestException catch (e) {
+          if (!isTableOrViewUnavailable(e)) rethrow;
+          debugPrint(
+            '[JobRemoteDataSource.getJobById] View v_user_jobs indisponível (${e.code}).',
+          );
+        }
+      }
+
+      if (jobData == null) {
+        throw JobNotFoundFailure(cleanId);
+      }
+
+      return JobItem.fromJson(jobData);
     } on PostgrestException catch (e) {
       debugPrint(
         '[JobRemoteDataSource.getJobById] PostgrestException: ${e.message} (code: ${e.code})',

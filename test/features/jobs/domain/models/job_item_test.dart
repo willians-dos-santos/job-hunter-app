@@ -236,5 +236,59 @@ void main() {
       expect(item.jobId, 'job-303');
       expect(item.status, JobStatus.interview);
     });
+
+    test('correctly deserializes raw payload from canonical jobs table for newly notified job without interaction', () {
+      final canonicalJobJson = <String, dynamic>{
+        'id': 'greenhouse:4059281',
+        'ats': 'greenhouse',
+        'external_id': '4059281',
+        'title': 'Mobile Staff Engineer',
+        'company': 'Stripe',
+        'location': 'Remoto - Brasil',
+        'url': 'https://boards.greenhouse.io/stripe/jobs/4059281',
+        'published_at': '2026-10-15T12:00:00.000Z',
+        'created_at': '2026-10-15T12:05:00.000Z',
+        'dedup_key': 'a1b2c3d4e5',
+      };
+
+      final item = JobItem.fromJson(canonicalJobJson);
+
+      expect(item.jobId, 'greenhouse:4059281');
+      expect(item.title, 'Mobile Staff Engineer');
+      expect(item.companyName, 'Stripe');
+      expect(item.platform, 'greenhouse');
+      expect(item.jobUrl, 'https://boards.greenhouse.io/stripe/jobs/4059281');
+      expect(item.location, 'Remoto - Brasil');
+      expect(item.status, JobStatus.newJob);
+      expect(item.isArchived, isFalse);
+      expect(item.notes, isNull);
+      expect(item.appliedAt, isNull);
+      expect(item.userId, isNull);
+      expect(item.publishedAt, isNotNull);
+      expect(item.createdAt, isNotNull);
+    });
+
+    test('correctly parses DateTime instances directly without double parsing', () {
+      final now = DateTime.now();
+      final jsonWithDateTimes = <String, dynamic>{
+        'id': 'job-dt',
+        'title': 'Flutter Dev',
+        'company': 'Tech',
+        'ats': 'gupy',
+        'url': 'https://test.com',
+        'created_at': now,
+        'published_at': now,
+        'applied_at': now,
+        'updated_at': now,
+      };
+
+      final item = JobItem.fromJson(jsonWithDateTimes);
+
+      expect(item.jobId, 'job-dt');
+      expect(item.createdAt, isNotNull);
+      expect(item.publishedAt, isNotNull);
+      expect(item.appliedAt, isNotNull);
+      expect(item.interactionUpdatedAt, isNotNull);
+    });
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/constants/app_constants.dart';
 import 'core/errors/configuration_exception.dart';
 import 'core/services/env_config.dart';
+import 'core/services/notification_service.dart';
 import 'core/services/supabase_service.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
@@ -34,7 +35,16 @@ Future<void> main() async {
     bootstrapError = 'Erro inesperado na inicialização: $e';
   }
 
-  runApp(JobHunterApp(bootstrapError: bootstrapError));
+  try {
+    await NotificationService.instance.initialize();
+  } catch (e) {
+    debugPrint('Erro ao inicializar serviços de notificação: $e');
+  }
+
+  runApp(JobHunterApp(
+    bootstrapError: bootstrapError,
+    navigatorKey: NotificationService.navigatorKey,
+  ));
 }
 
 /// Root widget of the Job Hunter application.
@@ -45,16 +55,19 @@ class JobHunterApp extends StatelessWidget {
     this.jobsRepository,
     this.jobsCubit,
     this.home,
+    this.navigatorKey,
   });
 
   final String? bootstrapError;
   final IJobRepository? jobsRepository;
   final JobsCubit? jobsCubit;
   final Widget? home;
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,

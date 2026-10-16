@@ -231,38 +231,159 @@ void main() {
   });
 
   group('JobRemoteDataSource - getJobById', () {
-    test('returns JobItem when record is found', () async {
-      String? capturedCol;
-      Object? capturedVal;
-      String? capturedOr;
+    test('returns JobItem from canonical jobs table filtering by id and merges user_job_interactions', () async {
+      final capturedEq = <String, Object?>{};
 
-      final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
-        data: [sampleJobJson],
+      final mockJobsBuilder = MockSupabaseQueryBuilder();
+      final mockInteractionsBuilder = MockSupabaseQueryBuilder();
+
+      final fakeJobBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [
+          {
+            'id': 'job-123',
+            'title': 'Senior Flutter Engineer',
+            'company': 'Tech Corp',
+            'ats': 'lever',
+            'url': 'https://jobs.lever.co/techcorp/123',
+            'location': 'Remoto',
+            'published_at': '2026-10-10T08:00:00.000Z',
+            'created_at': '2026-10-10T10:00:00.000Z',
+          }
+        ],
         onEq: (col, val) {
-          capturedCol = col;
-          capturedVal = val;
-        },
-        onOr: (filters) {
-          capturedOr = filters;
+          capturedEq['jobs.$col'] = val;
         },
       );
 
-      when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
+      final fakeInteractionBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [
+          {
+            'job_id': 'job-123',
+            'user_id': 'usr-test-123',
+            'status': 'interviewing',
+            'notes': 'Nota técnica',
+            'applied_at': '2026-10-11T10:00:00.000Z',
+            'is_archived': false,
+            'updated_at': '2026-10-12T10:00:00.000Z',
+          }
+        ],
+        onEq: (col, val) {
+          capturedEq['interactions.$col'] = val;
+        },
+      );
+
+      when(() => mockClient.from(AppConstants.jobsTable))
+          .thenAnswer((_) => mockJobsBuilder);
+      when(() => mockJobsBuilder.select())
+          .thenAnswer((_) => fakeJobBuilder);
+
+      when(() => mockClient.from(AppConstants.userJobInteractionsTable))
+          .thenAnswer((_) => mockInteractionsBuilder);
+      when(() => mockInteractionsBuilder.select())
+          .thenAnswer((_) => fakeInteractionBuilder);
 
       final job = await dataSource.getJobById('job-123');
 
       expect(job.jobId, 'job-123');
       expect(job.title, 'Senior Flutter Engineer');
-      expect(capturedCol, 'job_id');
-      expect(capturedVal, 'job-123');
-      expect(capturedOr, 'user_id.is.null,user_id.eq.usr-test-123');
+      expect(job.companyName, 'Tech Corp');
+      expect(job.platform, 'lever');
+      expect(job.status, JobStatus.interview);
+      expect(job.notes, 'Nota técnica');
+      expect(capturedEq['jobs.id'], 'job-123');
+      expect(capturedEq['interactions.job_id'], 'job-123');
+      expect(capturedEq['interactions.user_id'], 'usr-test-123');
+      verify(() => mockClient.from(AppConstants.jobsTable)).called(1);
+      verify(() => mockClient.from(AppConstants.userJobInteractionsTable)).called(1);
     });
 
-    test('throws JobNotFoundFailure when record is null', () async {
+    test('returns newly notified JobItem with default status and no interaction', () async {
+      final mockJobsBuilder = MockSupabaseQueryBuilder();
+      final mockInteractionsBuilder = MockSupabaseQueryBuilder();
+
+      final fakeJobBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [
+          {
+            'id': 'new-job-999',
+            'title': 'Mobile Architect',
+            'company': 'Google',
+            'ats': 'greenhouse',
+            'url': 'https://google.com/jobs/999',
+            'published_at': '2026-10-15T08:00:00.000Z',
+          }
+        ],
+      );
+
+      final fakeInteractionBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [],
+      );
+
+      when(() => mockClient.from(AppConstants.jobsTable))
+          .thenAnswer((_) => mockJobsBuilder);
+      when(() => mockJobsBuilder.select())
+          .thenAnswer((_) => fakeJobBuilder);
+
+      when(() => mockClient.from(AppConstants.userJobInteractionsTable))
+          .thenAnswer((_) => mockInteractionsBuilder);
+      when(() => mockInteractionsBuilder.select())
+          .thenAnswer((_) => fakeInteractionBuilder);
+
+      final job = await dataSource.getJobById('new-job-999');
+
+      expect(job.jobId, 'new-job-999');
+      expect(job.title, 'Mobile Architect');
+      expect(job.companyName, 'Google');
+      expect(job.platform, 'greenhouse');
+      expect(job.status, JobStatus.newJob);
+      expect(job.isArchived, isFalse);
+      expect(job.notes, isNull);
+      expect(job.appliedAt, isNull);
+    });
+
+    test('falls back to v_new_jobs when record not found in jobs table', () async {
+      final mockJobsBuilder = MockSupabaseQueryBuilder();
+      final mockNewJobsBuilder = MockSupabaseQueryBuilder();
+
+      final fakeJobBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [],
+      );
+
+      String? newJobsCapturedCol;
+      Object? newJobsCapturedVal;
+
+      final fakeNewJobsBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
+        data: [sampleJobJson],
+        onEq: (col, val) {
+          newJobsCapturedCol = col;
+          newJobsCapturedVal = val;
+        },
+      );
+
+      when(() => mockClient.from(AppConstants.jobsTable))
+          .thenAnswer((_) => mockJobsBuilder);
+      when(() => mockJobsBuilder.select())
+          .thenAnswer((_) => fakeJobBuilder);
+
+      when(() => mockClient.from(AppConstants.newJobsView))
+          .thenAnswer((_) => mockNewJobsBuilder);
+      when(() => mockNewJobsBuilder.select())
+          .thenAnswer((_) => fakeNewJobsBuilder);
+
+      final job = await dataSource.getJobById('job-123');
+
+      expect(job.jobId, 'job-123');
+      expect(job.title, 'Senior Flutter Engineer');
+      expect(newJobsCapturedCol, 'job_id');
+      expect(newJobsCapturedVal, 'job-123');
+      verify(() => mockClient.from(AppConstants.newJobsView)).called(1);
+    });
+
+    test('throws JobNotFoundFailure when record is null across all tables and views', () async {
       final fakeBuilder = FakePostgrestFilterBuilder<List<Map<String, dynamic>>>(
         data: [],
       );
 
+      when(() => mockClient.from(any())).thenAnswer((_) => mockQueryBuilder);
       when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
 
       expect(
@@ -277,6 +398,7 @@ void main() {
         error: const PostgrestException(message: 'Database error', code: '500'),
       );
 
+      when(() => mockClient.from(any())).thenAnswer((_) => mockQueryBuilder);
       when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
 
       expect(
@@ -290,6 +412,7 @@ void main() {
         data: [sampleJobJson],
       );
 
+      when(() => mockClient.from(any())).thenAnswer((_) => mockQueryBuilder);
       when(() => mockQueryBuilder.select()).thenAnswer((_) => fakeBuilder);
 
       final job = await dataSource.fetchJobById('job-123');

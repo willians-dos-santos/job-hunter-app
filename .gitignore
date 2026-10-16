@@ -59,3 +59,6 @@ linux/flutter/ephemeral/
 !.specify/memory/
 !.specify/memory/constitution.md
 .agents/
+
+# --- ANDROID ---
+android/app/google-services.json

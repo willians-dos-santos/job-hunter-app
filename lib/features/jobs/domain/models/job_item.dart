@@ -30,34 +30,30 @@ class JobItem {
   /// Resiliently handles missing, unexpected, and alternative column names
   /// (such as `company`, `ats`, `url`, `job_created_at`, `interaction_updated_at`).
   factory JobItem.fromJson(Map<String, dynamic> json) {
-    final rawJobId = json['job_id'] ?? json['id'] ?? json['jobId'];
+    DateTime? parseDate(dynamic raw) {
+      if (raw == null) return null;
+      if (raw is DateTime) return raw.toLocal();
+      return DateTime.tryParse(raw.toString())?.toLocal();
+    }
+
+    final rawJobId = json['job_id'] ?? json['id'] ?? json['jobId'] ?? json['external_id'];
     final rawTitle = json['title'];
-    final rawCompany = json['company_name'] ?? json['company'];
-    final rawPlatform = json['platform'] ?? json['ats'];
-    final rawUrl = json['job_url'] ?? json['url'];
+    final rawCompany = json['company_name'] ?? json['company'] ?? json['companyName'];
+    final rawPlatform = json['platform'] ?? json['ats'] ?? json['source'];
+    final rawUrl = json['job_url'] ?? json['url'] ?? json['link'];
     final rawCreatedAt = json['created_at'] ?? json['job_created_at'];
     final rawAppliedAt = json['applied_at'];
     final rawPublishedAt = json['published_at'];
-    final rawInteractionUpdatedAt = json['interaction_updated_at'];
+    final rawInteractionUpdatedAt =
+        json['interaction_updated_at'] ?? json['updated_at'];
     final rawIsArchived = json['is_archived'];
-    final rawUserId = json['user_id'];
+    final rawUserId = json['user_id'] ?? json['userId'];
     final rawStatus = json['status'] ?? json['pipeline_status'];
 
-    final createdAtParsed = rawCreatedAt != null
-        ? DateTime.tryParse(rawCreatedAt.toString())?.toLocal()
-        : null;
-
-    final appliedAtParsed = rawAppliedAt != null
-        ? DateTime.tryParse(rawAppliedAt.toString())?.toLocal()
-        : null;
-
-    final publishedAtParsed = rawPublishedAt != null
-        ? DateTime.tryParse(rawPublishedAt.toString())?.toLocal()
-        : null;
-
-    final interactionUpdatedAtParsed = rawInteractionUpdatedAt != null
-        ? DateTime.tryParse(rawInteractionUpdatedAt.toString())?.toLocal()
-        : null;
+    final createdAtParsed = parseDate(rawCreatedAt);
+    final appliedAtParsed = parseDate(rawAppliedAt);
+    final publishedAtParsed = parseDate(rawPublishedAt);
+    final interactionUpdatedAtParsed = parseDate(rawInteractionUpdatedAt);
 
     final isArchivedParsed = rawIsArchived == true ||
         rawIsArchived == 1 ||
@@ -71,10 +67,10 @@ class JobItem {
       companyName: rawCompany?.toString() ?? '',
       platform: rawPlatform?.toString() ?? '',
       jobUrl: rawUrl?.toString() ?? '',
-      location: json['location']?.toString(),
-      salaryText: json['salary_text']?.toString(),
+      location: (json['location'] ?? json['city'])?.toString(),
+      salaryText: (json['salary_text'] ?? json['salary'])?.toString(),
       status: JobStatus.fromString(rawStatus?.toString()),
-      notes: json['notes']?.toString(),
+      notes: (json['notes'] ?? json['user_notes'])?.toString(),
       appliedAt: appliedAtParsed,
       publishedAt: publishedAtParsed,
       createdAt: createdAtParsed ?? publishedAtParsed,
