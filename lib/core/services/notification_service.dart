@@ -294,13 +294,17 @@ class NotificationService {
     }
   }
 
+  static String cleanJobId(String jobId) {
+    return jobId.toString().trim().replaceAll('_', ':');
+  }
+
   /// Extracts `job_id` from various payload structures (Map or JSON string).
   static String? extractJobId(dynamic source) {
     if (source == null) return null;
     if (source is Map) {
       final jobId = source['job_id'] ?? source['jobId'];
       if (jobId != null && jobId.toString().trim().isNotEmpty) {
-        return jobId.toString().trim();
+        return cleanJobId(jobId.toString());
       }
     }
     if (source is String) {
@@ -311,12 +315,11 @@ class NotificationService {
         if (decoded is Map) {
           final jobId = decoded['job_id'] ?? decoded['jobId'];
           if (jobId != null && jobId.toString().trim().isNotEmpty) {
-            return jobId.toString().trim();
+            return cleanJobId(jobId.toString());
           }
         }
       } catch (_) {
-        // String pode ser o próprio jobId
-        return str;
+        return cleanJobId(str);
       }
     }
     return null;

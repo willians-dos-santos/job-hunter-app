@@ -36,11 +36,11 @@ class JobItem {
       return DateTime.tryParse(raw.toString())?.toLocal();
     }
 
-    final rawJobId = json['job_id'] ?? json['id'] ?? json['jobId'] ?? json['external_id'];
+    final rawJobId = json['job_id'] ?? json['id'];
     final rawTitle = json['title'];
-    final rawCompany = json['company_name'] ?? json['company'] ?? json['companyName'];
-    final rawPlatform = json['platform'] ?? json['ats'] ?? json['source'];
-    final rawUrl = json['job_url'] ?? json['url'] ?? json['link'];
+    final rawCompany = json['company_name'] ?? json['company'];
+    final rawPlatform = json['platform'] ?? json['ats'];
+    final rawUrl = json['job_url'] ?? json['url'];
     final rawCreatedAt = json['created_at'] ?? json['job_created_at'];
     final rawAppliedAt = json['applied_at'];
     final rawPublishedAt = json['published_at'];
