@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
   <img src="https://img.shields.io/badge/Architecture-Clean%20%2F%20Feature--First-7C3AED?style=for-the-badge" alt="Clean Architecture" />
   <img src="https://img.shields.io/badge/State-Bloc%20%2F%20Cubit-2563EB?style=for-the-badge" alt="Bloc/Cubit" />
-  <img src="https://img.shields.io/badge/Tests-215%20Passing-10B981?style=for-the-badge" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-285%20Passing-10B981?style=for-the-badge" alt="Tests" />
   <img src="https://img.shields.io/badge/License-MIT-F59E0B?style=for-the-badge" alt="License MIT" />
 </p>
 
@@ -82,6 +82,11 @@ Com uma interface moderna inspirada em painéis de alta produtividade (tema escu
 ### 5. Arquivamento e Histórico (`ArchivedJobsScreen`)
 - Permite arquivar oportunidades sem excluí-las permanentemente, mantendo o quadro Kanban focado apenas em processos ativos.
 - Ecrã dedicado para consulta do histórico de vagas arquivadas com opção de **Restauração Imediata** para o funil.
+
+### 6. Conversão e Extração de Vagas em Markdown (Jina Reader AI)
+- **Extração Inteligente via Reader:** Conversão instantânea da página externa da vaga (URL) em Markdown estruturado através da integração com o Jina AI Reader (`https://r.jina.ai/`).
+- **Cópia Instantânea para a Área de Transferência:** Botão dedicado no modal de detalhes que extrai e copia a descrição da vaga com feedback visual flutuante.
+- **Pré-visualização Interativa (`JobMarkdownPreviewDialog`):** Modal com visualização monoespaçada do Markdown, permitindo inspecionar o conteúdo na íntegra e acionar nova cópia.
 
 ---
 
@@ -227,11 +232,12 @@ flutter analyze
 flutter test
 ```
 
-### Cobertura de Testes Automatizados (215 testes passando):
+### Cobertura de Testes Automatizados (285 testes passando):
 - **Testes Unitários de Domínio & Modelos:** Validação de serialização JSON, mapeamento de enums (`JobStatus`, `SearchConfigCategory`) e cálculo de métricas de conversão.
 - **Testes Unitários de Repositórios & DataSources:** Verificação de chamadas ao Supabase utilizando mocks (`mocktail`) e fakes de resposta com simulação de cenários de sucesso e falhas de rede.
-- **Testes de Gerenciamento de Estado (Cubits):** Validação de transições de estado, reversão otimista em falhas de API, debounce de busca e atualização de anotações.
-- **Testes de Widget & Interface:** Testes de renderização do quadro Kanban, colunas, cards, navegação entre telas, modais de detalhes e grupos de chips de filtro.
+- **Testes de Conversão Markdown (Jina AI):** Testes unitários de cliente HTTP, parsing e repositório de conversão de vagas para Markdown.
+- **Testes de Gerenciamento de Estado (Cubits):** Validação de transições de estado, conversão assíncrona, reversão otimista em falhas de API, debounce de busca e atualização de anotações.
+- **Testes de Widget & Interface:** Testes de renderização do quadro Kanban, colunas, cards, navegação entre telas, modais de detalhes, prévia de Markdown e grupos de chips de filtro.
 
 ---
 

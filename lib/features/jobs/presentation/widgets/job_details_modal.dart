@@ -4,8 +4,13 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/kanban_status_colors.dart';
+import '../../data/datasources/job_markdown_remote_datasource.dart';
+import '../../data/repositories/job_markdown_repository_impl.dart';
 import '../../domain/models/job_item.dart';
+import '../cubit/job_markdown_cubit.dart';
+import '../cubit/job_markdown_state.dart';
 import '../cubit/jobs_cubit.dart';
+import 'job_markdown_preview_dialog.dart';
 
 /// Opens the responsive [JobDetailsModal] bottom sheet for the given [job].
 Future<void> showJobDetailsModal(
@@ -14,6 +19,9 @@ Future<void> showJobDetailsModal(
   JobsCubit? cubit,
   Future<void> Function(String notes)? onSaveNotes,
   VoidCallback? onOpenUrl,
+  JobMarkdownCubit? markdownCubit,
+  Future<void> Function(String url)? onConvertToMarkdown,
+  VoidCallback? onPreviewMarkdown,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -24,6 +32,10 @@ Future<void> showJobDetailsModal(
       cubit: cubit,
       onSaveNotes: onSaveNotes,
       onOpenUrl: onOpenUrl,
+      markdownCubit: markdownCubit,
+      onConvertToMarkdown: onConvertToMarkdown,
+      onPreviewMarkdown: onPreviewMarkdown,
+      parentContext: context,
     ),
   );
 }
@@ -36,30 +48,70 @@ class JobDetailsModal extends StatefulWidget {
     this.cubit,
     this.onSaveNotes,
     this.onOpenUrl,
+    this.markdownCubit,
+    this.onConvertToMarkdown,
+    this.onPreviewMarkdown,
+    this.parentContext,
   });
 
   final JobItem job;
   final JobsCubit? cubit;
   final Future<void> Function(String notes)? onSaveNotes;
   final VoidCallback? onOpenUrl;
+  final JobMarkdownCubit? markdownCubit;
+  final Future<void> Function(String url)? onConvertToMarkdown;
+  final VoidCallback? onPreviewMarkdown;
+  final BuildContext? parentContext;
 
   @override
   State<JobDetailsModal> createState() => _JobDetailsModalState();
 }
 
 class _JobDetailsModalState extends State<JobDetailsModal> {
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
   late final TextEditingController _notesController;
+  late final JobMarkdownCubit _markdownCubit;
+  bool _ownsMarkdownCubit = false;
   bool _isSaving = false;
+  bool _isConvertingMarkdown = false;
+  String? _convertedMarkdown;
+
+  void _showModalSnackBar(SnackBar snackBar) {
+    final messenger = _scaffoldMessengerKey.currentState;
+    if (messenger != null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(snackBar);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(snackBar);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _notesController = TextEditingController(text: widget.job.notes ?? '');
+    if (widget.markdownCubit != null) {
+      _markdownCubit = widget.markdownCubit!;
+    } else {
+      _markdownCubit = JobMarkdownCubit(
+        repository: JobMarkdownRepositoryImpl(
+          remoteDataSource: JobMarkdownRemoteDataSource(),
+        ),
+      );
+      _ownsMarkdownCubit = true;
+    }
   }
 
   @override
   void dispose() {
     _notesController.dispose();
+    if (_ownsMarkdownCubit) {
+      _markdownCubit.close();
+    }
     super.dispose();
   }
 
@@ -81,7 +133,7 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
     final rawUrl = widget.job.jobUrl.trim();
     if (rawUrl.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        _showModalSnackBar(
           const SnackBar(
             key: ValueKey('job_details_url_error_snackbar'),
             content: Text('URL da vaga não disponível.'),
@@ -118,7 +170,7 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
       }
 
       if (!launched && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        _showModalSnackBar(
           const SnackBar(
             key: ValueKey('job_details_url_error_snackbar'),
             content: Text('Não foi possível abrir o link da vaga externa.'),
@@ -129,7 +181,7 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        _showModalSnackBar(
           SnackBar(
             key: const ValueKey('job_details_url_error_snackbar'),
             content: Text('Erro ao abrir o link da vaga: $e'),
@@ -154,19 +206,22 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
         );
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            key: ValueKey('job_details_saved_snackbar'),
-            content: Text('Anotações salvas com sucesso.'),
-            backgroundColor: AppColors.slate800,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        final targetContext = widget.parentContext ?? context;
+        if (targetContext.mounted) {
+          ScaffoldMessenger.of(targetContext).showSnackBar(
+            const SnackBar(
+              key: ValueKey('job_details_saved_snackbar'),
+              content: Text('Anotações salvas com sucesso.'),
+              backgroundColor: AppColors.slate800,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
         Navigator.of(context).maybePop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        _showModalSnackBar(
           SnackBar(
             content: Text('Erro ao salvar anotações: $e'),
             backgroundColor: AppColors.kanbanRejected,
@@ -179,6 +234,103 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  Future<void> _handleConvertToMarkdown() async {
+    final rawUrl = widget.job.jobUrl.trim();
+    if (rawUrl.isEmpty) {
+      if (mounted) {
+        _showModalSnackBar(
+          const SnackBar(
+            key: ValueKey('job_details_markdown_error_snackbar'),
+            content: Text('URL da vaga não disponível para conversão.'),
+            backgroundColor: AppColors.kanbanRejected,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isConvertingMarkdown = true);
+
+    try {
+      if (widget.onConvertToMarkdown != null) {
+        await widget.onConvertToMarkdown!(rawUrl);
+      } else {
+        final success = await _markdownCubit.convertAndCopy(
+          jobId: widget.job.jobId,
+          jobUrl: rawUrl,
+        );
+
+        if (mounted) {
+          final state = _markdownCubit.state;
+          if (success && state is JobMarkdownSuccess) {
+            setState(() {
+              _convertedMarkdown = state.content.markdown;
+            });
+            _showModalSnackBar(
+              SnackBar(
+                key: const ValueKey('job_details_markdown_saved_snackbar'),
+                content: const Text('Markdown da vaga copiado com sucesso!'),
+                backgroundColor: AppColors.slate800,
+                behavior: SnackBarBehavior.floating,
+                action: SnackBarAction(
+                  label: 'Visualizar',
+                  textColor: AppColors.terminalCyan,
+                  onPressed: () => _openMarkdownPreview(),
+                ),
+              ),
+            );
+          } else if (state is JobMarkdownError) {
+            _showModalSnackBar(
+              SnackBar(
+                key: const ValueKey('job_details_markdown_error_snackbar'),
+                content: Text(state.errorMessage),
+                backgroundColor: AppColors.kanbanRejected,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showModalSnackBar(
+          SnackBar(
+            key: const ValueKey('job_details_markdown_error_snackbar'),
+            content: Text('Erro ao converter vaga: $e'),
+            backgroundColor: AppColors.kanbanRejected,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isConvertingMarkdown = false);
+      }
+    }
+  }
+
+  void _openMarkdownPreview() {
+    if (widget.onPreviewMarkdown != null) {
+      widget.onPreviewMarkdown!();
+      return;
+    }
+    final text = _convertedMarkdown ?? '';
+    if (text.isEmpty) return;
+
+    final targetContext = (mounted ? context : widget.parentContext) ?? context;
+    if (!targetContext.mounted) return;
+
+    final messenger = _scaffoldMessengerKey.currentState;
+    messenger?.hideCurrentSnackBar();
+
+    showJobMarkdownPreviewDialog(
+      targetContext,
+      title: widget.job.title,
+      markdown: text,
+    );
   }
 
   String _formatDate(DateTime? date) {
@@ -205,11 +357,22 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
     final statusColor = context.kanbanColors.colorFor(widget.job.status);
     final modality = _detectModality(widget.job.location);
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: Container(
-          decoration: const BoxDecoration(
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        resizeToAvoidBottomInset: false,
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(context).maybePop(),
+          child: Center(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {},
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: Container(
+                  decoration: const BoxDecoration(
             color: AppColors.slate900,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             border: Border(
@@ -221,8 +384,8 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
           padding: EdgeInsets.only(
             left: 20,
             right: 20,
-            top: 12,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            top: 10,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
           ),
           child: SingleChildScrollView(
             child: Column(
@@ -240,7 +403,7 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
 
                 // Top row with status badge and close button
                 Row(
@@ -438,42 +601,112 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
-                // External Link Button
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    key: const ValueKey('job_details_open_url_button'),
-                    icon: const Icon(
-                      Icons.open_in_new_rounded,
-                      size: 18,
-                      color: AppColors.terminalCyan,
-                    ),
-                    label: const Text(
-                      'Acessar vaga externa',
-                      style: TextStyle(
-                        color: AppColors.textWhite,
-                        fontWeight: FontWeight.w600,
+                // External Link Button & Markdown Converter Button
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('job_details_open_url_button'),
+                        icon: const Icon(
+                          Icons.open_in_new_rounded,
+                          size: 18,
+                          color: AppColors.terminalCyan,
+                        ),
+                        label: const Text(
+                          'Acessar vaga externa',
+                          style: TextStyle(
+                            color: AppColors.textWhite,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                          backgroundColor: AppColors.slate800,
+                          side: const BorderSide(color: AppColors.slate700),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: widget.job.jobUrl.isNotEmpty
+                            ? () => _handleOpenUrl()
+                            : null,
                       ),
                     ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      backgroundColor: AppColors.slate800,
-                      side: const BorderSide(color: AppColors.slate700),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('job_details_copy_markdown_button'),
+                        icon: _isConvertingMarkdown
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primaryIndigo,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.content_copy_rounded,
+                                size: 18,
+                                color: AppColors.primaryIndigo,
+                              ),
+                        label: Text(
+                          _isConvertingMarkdown
+                              ? 'Convertendo para Markdown...'
+                              : 'Copiar em Markdown',
+                          style: const TextStyle(
+                            color: AppColors.textWhite,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                          backgroundColor: AppColors.slate800,
+                          side: const BorderSide(color: AppColors.slate700),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: widget.job.jobUrl.isNotEmpty && !_isConvertingMarkdown
+                            ? () => _handleConvertToMarkdown()
+                            : null,
                       ),
                     ),
-                    onPressed: widget.job.jobUrl.isNotEmpty
-                        ? () => _handleOpenUrl()
-                        : null,
-                  ),
+                    if (_convertedMarkdown != null && _convertedMarkdown!.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        key: const ValueKey('job_details_view_markdown_button'),
+                        tooltip: 'Visualizar Markdown',
+                        icon: const Icon(
+                          Icons.visibility_outlined,
+                          color: AppColors.terminalCyan,
+                          size: 20,
+                        ),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppColors.slate800,
+                          side: const BorderSide(color: AppColors.slate700),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                        ),
+                        onPressed: _openMarkdownPreview,
+                      ),
+                    ],
+                  ],
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
                 const Divider(color: AppColors.slate700, height: 1),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
                 // Personal Notes Section
                 Row(
@@ -579,7 +812,11 @@ class _JobDetailsModalState extends State<JobDetailsModal> {
           ),
         ),
       ),
-    );
+    ),
+  ),
+),
+  ),
+);
   }
 }
 
